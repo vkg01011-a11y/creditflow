@@ -162,6 +162,8 @@ model AutomationRule {
   // Extensible configuration for future AND/OR conditions.
   conditions        Json?
 
+  archivedAt        DateTime?
+
   requirePrepaid    Boolean  @default(false)
   expiryDays        Int?
   notifyCustomer    Boolean  @default(true)
@@ -174,6 +176,7 @@ model AutomationRule {
 
   @@index([shop, enabled, trigger, priority])
   @@index([shop, createdAt])
+  @@index([shop, archivedAt])
 }
 
 // ============================================================
@@ -348,4 +351,35 @@ model AuditLog {
 
   @@index([shop, createdAt])
   @@index([shop, entityType, entityId])
+}
+
+// Shopify PostgreSQL session-storage tables.
+// Their actual structure is maintained by the Shopify adapter.
+
+model ShopifySession {
+  id                  String   @id @db.VarChar(255)
+  shop                String   @db.VarChar(255)
+  state               String   @db.VarChar(255)
+  isOnline            Boolean
+  scope               String?  @db.VarChar(1024)
+  expires             Int?
+  accessToken         String?  @db.VarChar(255)
+  refreshToken        String?  @db.VarChar(255)
+  refreshTokenExpires BigInt?
+  userId              BigInt?
+  firstName           String?  @db.VarChar(255)
+  lastName            String?  @db.VarChar(255)
+  email               String?  @db.VarChar(255)
+  accountOwner        Boolean?
+  locale              String?  @db.VarChar(255)
+  collaborator        Boolean?
+  emailVerified       Boolean?
+
+  @@map("shopify_sessions")
+}
+
+model ShopifySessionMigration {
+  migration_name String @id @db.VarChar(255)
+
+  @@map("shopify_sessions_migrations")
 }
