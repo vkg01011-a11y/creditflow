@@ -1,0 +1,351 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum MerchantStatus {
+  ACTIVE
+  UNINSTALLED
+  SUSPENDED
+}
+
+enum CreditGrantStatus {
+  PROCESSING
+  ISSUED
+  FAILED
+  REVIEW_REQUIRED
+  REVERSED
+  PARTIALLY_REVERSED
+}
+
+enum CreditTransactionType {
+  CASHBACK_CREDIT
+  MANUAL_CREDIT
+  MANUAL_DEBIT
+  CREDIT_REDEMPTION
+  REFUND_REVERSAL
+  REWARD_REVERSAL
+  EXPIRY
+  ADJUSTMENT
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  REVIEW_REQUIRED
+}
+
+enum NotificationType {
+  CREDIT_ISSUED
+  CREDIT_REDEEMED
+  CREDIT_DEDUCTED
+  CREDIT_EXPIRING
+  CREDIT_EXPIRED
+  CREDIT_REVERSED
+  MANUAL_CREDIT
+  MANUAL_DEBIT
+}
+
+enum NotificationStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+}
+
+// ============================================================
+// SHOPIFY AUTHENTICATION SESSION
+// Preserve the model required by Shopify's session adapter.
+// ============================================================
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires              DateTime?
+  accessToken          String
+  userId               BigInt?
+  firstName            String?
+  lastName             String?
+  email                String?
+  accountOwner         Boolean   @default(false)
+  locale               String?
+  collaborator         Boolean?  @default(false)
+  emailVerified        Boolean?  @default(false)
+  refreshToken         String?
+  refreshTokenExpires  DateTime?
+}
+
+// ============================================================
+// MERCHANT / SHOP INSTALLATION
+// One merchant record per Shopify shop.
+// ============================================================
+
+model Merchant {
+  id                  String         @id @default(cuid())
+  shop                String         @unique
+  shopName            String?
+  contactEmail        String?
+  primaryCurrencyCode String?        @db.VarChar(3)
+  timezone            String?
+  status              MerchantStatus @default(ACTIVE)
+  installedAt         DateTime       @default(now())
+  uninstalledAt       DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  automationRules AutomationRule[]
+  grants          CreditGrant[]
+  ledgerEntries   CreditLedgerEntry[]
+  webhookEvents   WebhookEvent[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+
+  @@index([status, createdAt])
+}
+
+// ============================================================
+// AUTOMATION RULES
+// Supports the existing fulfilment reward service.
+// ============================================================
+
+model AutomationRule {
+  id                String   @id @default(cuid())
+  shop              String
+  name              String
+  description       String?
+  enabled           Boolean  @default(true)
+
+  // ORDER_FULFILLED, ORDER_PAID, ORDER_PLACED, etc.
+  trigger           String   @default("ORDER_FULFILLED")
+  priority          Int      @default(100)
+
+  // PERCENTAGE or FIXED
+  rewardType        String
+
+  // ORDER_SUBTOTAL or ELIGIBLE_ITEMS
+  rewardBase        String   @default("ORDER_SUBTOTAL")
+
+  // Example: 2.50 means 2.50%
+  percentage        Decimal? @db.Decimal(7, 2)
+
+  fixedAmount       Decimal? @db.Decimal(20, 6)
+  minimumOrderValue Decimal? @db.Decimal(20, 6)
+  maximumReward     Decimal? @db.Decimal(20, 6)
+
+  // ALL, INCLUDE or EXCLUDE
+  productMode       String   @default("ALL")
+
+  // JSON-encoded product ID array.
+  // Kept as String for compatibility with the supplied MVP service.
+  productIds        String   @default("[]")
+
+  // Extensible configuration for future AND/OR conditions.
+  conditions        Json?
+
+  requirePrepaid    Boolean  @default(false)
+  expiryDays        Int?
+  notifyCustomer    Boolean  @default(true)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  merchant Merchant      @relation(fields: [shop], references: [shop], onDelete: Cascade)
+  grants   CreditGrant[]
+
+  @@index([shop, enabled, trigger, priority])
+  @@index([shop, createdAt])
+}
+
+// ============================================================
+// REWARD GRANTS
+// One record for each cashback reward reservation/issuance.
+// ============================================================
+
+model CreditGrant {
+  id                    String            @id @default(cuid())
+  shop                  String
+  eventKey              String            @unique
+
+  customerGid           String
+  orderGid              String
+  ruleId                String
+
+  amount                Decimal           @db.Decimal(20, 6)
+  currencyCode          String            @db.VarChar(3)
+
+  status                CreditGrantStatus @default(PROCESSING)
+
+  shopifyAccountGid     String?
+  shopifyTransactionGid String?
+
+  errorMessage          String?           @db.Text
+  issuedAt              DateTime?
+  reversedAmount        Decimal?          @db.Decimal(20, 6)
+
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  merchant      Merchant          @relation(fields: [shop], references: [shop], onDelete: Cascade)
+  rule          AutomationRule    @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  ledgerEntries CreditLedgerEntry[]
+
+  @@unique([shop, orderGid, ruleId])
+  @@unique([shop, shopifyTransactionGid])
+  @@index([shop, customerGid, createdAt])
+  @@index([shop, status, createdAt])
+  @@index([ruleId])
+}
+
+// ============================================================
+// CREDIT TRANSACTION LEDGER
+// Metadata only. Shopify remains the authoritative wallet.
+// ============================================================
+
+model CreditLedgerEntry {
+  id                    String                @id @default(cuid())
+  shop                  String
+  eventKey              String                @unique
+
+  customerGid           String
+  orderGid              String?
+  creditGrantId         String?
+
+  transactionType       CreditTransactionType
+  direction             LedgerDirection       @default(CREDIT)
+
+  // Store absolute positive amount; direction identifies credit/debit.
+  amount                Decimal               @db.Decimal(20, 6)
+  currencyCode          String                @db.VarChar(3)
+
+  reason                String                @db.Text
+  shopifyTransactionGid String?
+  expiresAt             DateTime?
+
+  actorType             String?
+  actorId               String?
+  metadata              Json?
+
+  createdAt             DateTime              @default(now())
+
+  merchant    Merchant     @relation(fields: [shop], references: [shop], onDelete: Cascade)
+  creditGrant CreditGrant? @relation(fields: [creditGrantId], references: [id], onDelete: SetNull)
+
+  @@index([shop, customerGid, createdAt])
+  @@index([shop, orderGid])
+  @@index([shop, transactionType, createdAt])
+  @@index([creditGrantId])
+}
+
+// ============================================================
+// WEBHOOK EVENTS
+// Supports idempotency, recovery and reconciliation.
+// No full customer webhook payload is stored here.
+// ============================================================
+
+model WebhookEvent {
+  id            String            @id @default(cuid())
+  shop          String
+  webhookId     String
+  topic         String
+  apiVersion    String?
+
+  status        WebhookEventStatus @default(RECEIVED)
+  attemptCount  Int               @default(0)
+
+  payloadHash   String?
+  lastError     String?           @db.Text
+
+  receivedAt    DateTime          @default(now())
+  processedAt   DateTime?
+  nextAttemptAt DateTime?
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@unique([shop, webhookId])
+  @@index([shop, status, receivedAt])
+  @@index([status, nextAttemptAt])
+}
+
+// ============================================================
+// CUSTOMER NOTIFICATIONS
+// Delivery and retry history.
+// ============================================================
+
+model Notification {
+  id               String             @id @default(cuid())
+  shop             String
+  customerGid      String
+
+  dedupeKey        String             @unique
+  type             NotificationType
+  status           NotificationStatus @default(QUEUED)
+
+  templateKey      String
+  subject          String?
+  provider         String?
+  providerMessageId String?
+
+  attemptCount     Int                @default(0)
+  lastError        String?            @db.Text
+
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([shop, customerGid, createdAt])
+  @@index([shop, status, scheduledAt])
+}
+
+// ============================================================
+// AUDIT LOG
+// History of merchant and administrative changes.
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  shop       String
+
+  actorType  String
+  actorId    String?
+
+  action     String
+  entityType String
+  entityId   String?
+
+  reason     String?  @db.Text
+  metadata   Json?
+
+  createdAt  DateTime @default(now())
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([shop, createdAt])
+  @@index([shop, entityType, entityId])
+}
