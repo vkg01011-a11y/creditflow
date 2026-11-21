@@ -32,3 +32,17 @@ export function normalizeCustomerPrivacyPayload(
   topic: "CUSTOMERS_DATA_REQUEST" | "CUSTOMERS_REDACT" | "SHOP_REDACT",
   payload: unknown,
 ): Record<string, unknown>;
+
+export type NormalizedRefundPayload = {
+  refundGid: string;
+  orderGid: string;
+  lineItems: Array<{
+    productId: string | null;
+    subtotal: string;
+    currencyCode: string | null;
+  }>;
+};
+
+export function normalizeRefundPayload(
+  payload: unknown,
+): NormalizedRefundPayload;

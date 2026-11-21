@@ -126,3 +126,59 @@ export function normalizeCustomerPrivacyPayload(topic, payload) {
 
   throw new TypeError("Unsupported privacy webhook topic.");
 }
+
+/**
+ * Persist only refund/order identifiers and shop-currency line subtotals.
+ * Unrelated customer and payment data is deliberately discarded.
+ */
+export function normalizeRefundPayload(payload) {
+  if (!isRecord(payload)) {
+    throw new TypeError("Refund webhook payload must be an object.");
+  }
+
+  const refundGid = resourceGid(
+    payload.admin_graphql_api_id ?? payload.id,
+    "Refund",
+  );
+  const orderGid = resourceGid(
+    payload.order_id ??
+      (isRecord(payload.order)
+        ? payload.order.admin_graphql_api_id ?? payload.order.id
+        : null),
+    "Order",
+  );
+
+  if (!refundGid) {
+    throw new TypeError("Refund webhook is missing a valid refund ID.");
+  }
+  if (!orderGid) {
+    throw new TypeError("Refund webhook is missing a valid order ID.");
+  }
+
+  const rawLines = Array.isArray(payload.refund_line_items)
+    ? payload.refund_line_items
+    : [];
+
+  const lineItems = rawLines.filter(isRecord).map((line) => {
+    const rawLineItem = isRecord(line.line_item) ? line.line_item : null;
+    const shopMoney = isRecord(line.subtotal_set) &&
+      isRecord(line.subtotal_set.shop_money)
+      ? line.subtotal_set.shop_money
+      : null;
+
+    const subtotal = optionalText(shopMoney?.amount ?? line.subtotal);
+    if (!subtotal || !/^\d+(?:\.\d+)?$/.test(subtotal)) {
+      throw new TypeError("Refund line item is missing a valid subtotal.");
+    }
+
+    const productId = optionalText(rawLineItem?.product_id);
+
+    return {
+      productId: productId && /^\d+$/.test(productId) ? productId : null,
+      subtotal,
+      currencyCode: optionalText(shopMoney?.currency_code)?.toUpperCase() ?? null,
+    };
+  });
+
+  return { refundGid, orderGid, lineItems };
+}

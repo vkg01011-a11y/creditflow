@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   normalizeCustomerPrivacyPayload,
   normalizeFulfillmentOrder,
+  normalizeRefundPayload,
 } from "../app/domain/webhook-payload.mjs";
 
 test("normalizes only the fulfillment fields needed by reward evaluation", () => {
@@ -91,5 +92,67 @@ test("normalizes shop redaction without retaining unrelated payload data", () =>
       unrelated: "not stored",
     }),
     { shopId: "789" },
+  );
+});
+
+test("normalizes refund line items and removes unrelated refund/customer data", () => {
+  const result = normalizeRefundPayload({
+    id: 900,
+    order_id: 123,
+    note: "Sensitive merchant note",
+    transactions: [{ amount: "50.00", gateway: "private gateway" }],
+    refund_line_items: [
+      {
+        id: 901,
+        quantity: 1,
+        subtotal: "25.00",
+        subtotal_set: {
+          shop_money: { amount: "25.00", currency_code: "USD" },
+          presentment_money: { amount: "23.00", currency_code: "EUR" },
+        },
+        line_item: {
+          product_id: 456,
+          title: "Private item title",
+          sku: "PRIVATE-SKU",
+        },
+      },
+    ],
+  });
+
+  assert.deepEqual(result, {
+    refundGid: "gid://shopify/Refund/900",
+    orderGid: "gid://shopify/Order/123",
+    lineItems: [{
+      productId: "456",
+      subtotal: "25.00",
+      currencyCode: "USD",
+    }],
+  });
+  assert.equal("transactions" in result, false);
+  assert.equal("note" in result, false);
+});
+
+test("rejects refund payloads without valid refund and order IDs", () => {
+  assert.throws(
+    () => normalizeRefundPayload({ order_id: 123 }),
+    /valid refund ID/,
+  );
+  assert.throws(
+    () => normalizeRefundPayload({ id: 900 }),
+    /valid order ID/,
+  );
+});
+
+test("rejects refund line items with invalid subtotals", () => {
+  assert.throws(
+    () => normalizeRefundPayload({
+      id: 900,
+      order_id: 123,
+      refund_line_items: [{
+        line_item: { product_id: 456 },
+        subtotal: "not-money",
+      }],
+    }),
+    /valid subtotal/,
   );
 });

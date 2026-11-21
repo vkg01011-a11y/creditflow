@@ -70,6 +70,13 @@ enum NotificationStatus {
   FAILED
 }
 
+enum CreditReversalStatus {
+  PROCESSING
+  REVERSED
+  NO_REVERSAL
+  REVIEW_REQUIRED
+}
+
 enum PrivacyRequestType {
   CUSTOMERS_DATA_REQUEST
   CUSTOMERS_REDACT
@@ -136,6 +143,7 @@ model Merchant {
   webhookEvents   WebhookEvent[]
   notifications   Notification[]
   auditLogs       AuditLog[]
+  creditReversals CreditReversal[]
 
   @@index([status, createdAt])
 }
@@ -221,6 +229,7 @@ model CreditGrant {
   errorMessage          String?           @db.Text
   issuedAt              DateTime?
   reversedAmount        Decimal?          @db.Decimal(20, 6)
+  rewardBaseAmount      Decimal?          @db.Decimal(20, 6)
 
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
@@ -228,6 +237,7 @@ model CreditGrant {
   merchant      Merchant          @relation(fields: [shop], references: [shop], onDelete: Cascade)
   rule          AutomationRule    @relation(fields: [ruleId], references: [id], onDelete: Restrict)
   ledgerEntries CreditLedgerEntry[]
+  reversals     CreditReversal[]
 
   @@unique([shop, orderGid, ruleId])
   @@unique([shop, shopifyTransactionGid])
@@ -434,4 +444,29 @@ model ShopifySessionMigration {
   migration_name String @id @db.VarChar(255)
 
   @@map("shopify_sessions_migrations")
+}
+
+model CreditReversal {
+  id                    String               @id @default(cuid())
+  shop                  String
+  refundGid             String
+  webhookId             String
+  orderGid              String
+  creditGrantId         String
+  refundedBaseAmount    Decimal              @db.Decimal(20, 6)
+  amount                Decimal              @db.Decimal(20, 6)
+  currencyCode          String               @db.VarChar(3)
+  status                CreditReversalStatus @default(PROCESSING)
+  shopifyTransactionGid String?
+  errorMessage          String?              @db.Text
+  processedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  merchant    Merchant    @relation(fields: [shop], references: [shop], onDelete: Cascade)
+  creditGrant CreditGrant @relation(fields: [creditGrantId], references: [id], onDelete: Cascade)
+
+  @@unique([shop, refundGid, creditGrantId])
+  @@index([shop, status, createdAt])
+  @@index([creditGrantId, status])
 }
