@@ -59,6 +59,9 @@ export default function App() {
         <s-link href="/app/privacy-requests">
           Privacy requests
         </s-link>
+        <s-link href="/app/reversals">
+          Refund reversals
+        </s-link>
       </s-app-nav>
 
       <Outlet />

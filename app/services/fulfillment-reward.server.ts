@@ -164,7 +164,7 @@ async function issueNativeStoreCredit(
 
     throw createProcessingError(
       messages.join("; ") || "Shopify did not return a store credit transaction.",
-      graphqlErrors.length > 0 || userErrors.length > 0,
+      graphqlErrors.length === 0 && userErrors.length > 0,
     );
   }
 
@@ -426,6 +426,10 @@ export async function processFulfilledOrder({
           ruleId: rule.id,
           amount: calculation.amount,
           currencyCode,
+          rewardBaseAmount:
+            rule.rewardBase === "ELIGIBLE_ITEMS"
+              ? eligibleSubtotal
+              : orderSubtotal,
           status: "PROCESSING",
         },
       });

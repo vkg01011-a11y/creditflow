@@ -797,7 +797,7 @@ export const action = async ({
           data: {
             shop,
             ...data,
-            enabled: body.enabled !== false,
+            enabled: body.enabled === true,
           },
         });
 

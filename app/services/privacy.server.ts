@@ -258,6 +258,19 @@ export async function processCustomerDataRequest({
     }),
   ]);
 
+  const reversals = grants.length > 0
+    ? await db.creditReversal.findMany({
+        where: { shop, creditGrantId: { in: grants.map((grant) => grant.id) } },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true, refundGid: true, orderGid: true,
+          refundedBaseAmount: true, amount: true, currencyCode: true,
+          status: true, shopifyTransactionGid: true, errorMessage: true,
+          processedAt: true, createdAt: true, updatedAt: true,
+        },
+      })
+    : [];
+
   const dataSnapshot = {
     generatedAt: new Date().toISOString(),
     shop,
@@ -269,9 +282,18 @@ export async function processCustomerDataRequest({
       ...grant,
       amount: grant.amount.toString(),
       reversedAmount: grant.reversedAmount?.toString() ?? null,
+      rewardBaseAmount: grant.rewardBaseAmount?.toString() ?? null,
       issuedAt: grant.issuedAt?.toISOString() ?? null,
       createdAt: grant.createdAt.toISOString(),
       updatedAt: grant.updatedAt.toISOString(),
+    })),
+    reversals: reversals.map((reversal) => ({
+      ...reversal,
+      refundedBaseAmount: reversal.refundedBaseAmount.toString(),
+      amount: reversal.amount.toString(),
+      processedAt: reversal.processedAt?.toISOString() ?? null,
+      createdAt: reversal.createdAt.toISOString(),
+      updatedAt: reversal.updatedAt.toISOString(),
     })),
     ledgerEntries: ledgerEntries.map((entry) => ({
       ...entry,
@@ -351,6 +373,25 @@ export async function processCustomerRedaction({
           orderGid: stableRedactedKey(grant.orderGid, shop),
           eventKey: stableRedactedKey(grant.eventKey, shop),
           shopifyAccountGid: null,
+          shopifyTransactionGid: null,
+          errorMessage: null,
+        },
+      });
+    }
+
+    const reversals = grants.length > 0
+      ? await tx.creditReversal.findMany({
+          where: { creditGrantId: { in: grants.map((grant) => grant.id) } },
+          select: { id: true, refundGid: true, orderGid: true },
+        })
+      : [];
+
+    for (const reversal of reversals) {
+      await tx.creditReversal.update({
+        where: { id: reversal.id },
+        data: {
+          refundGid: stableRedactedKey(reversal.refundGid, shop),
+          orderGid: stableRedactedKey(reversal.orderGid, shop),
           shopifyTransactionGid: null,
           errorMessage: null,
         },

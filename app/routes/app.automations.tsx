@@ -505,7 +505,7 @@ export default function AutomationsPage() {
 
     if (fetcher.data.success) {
       const messages: Record<string, string> = {
-        create: "Automation created successfully.",
+        create: "Automation created paused. Review it, then activate it when ready.",
         update: "Automation updated. Changes apply to future order evaluations.",
         toggle: "Automation status updated.",
         duplicate: "A paused copy of the automation was created.",
