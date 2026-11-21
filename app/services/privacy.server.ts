@@ -446,27 +446,30 @@ export async function processShopRedaction(shop: string) {
   ]);
 }
 
-export async function listPrivacyRequests(shop: string, requestId?: string) {
-  if (requestId) {
-    return db.privacyRequest.findFirst({
-      where: {
-        id: requestId,
-        shop,
-        type: "CUSTOMERS_DATA_REQUEST",
-        status: "COMPLETED",
-      },
-      select: {
-        id: true,
-        type: true,
-        status: true,
-        customerKey: true,
-        receivedAt: true,
-        processedAt: true,
-        dataSnapshot: true,
-      },
-    });
-  }
+export async function getPrivacyRequestExport(
+  shop: string,
+  requestId: string,
+) {
+  return db.privacyRequest.findFirst({
+    where: {
+      id: requestId,
+      shop,
+      type: "CUSTOMERS_DATA_REQUEST",
+      status: "COMPLETED",
+    },
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      customerKey: true,
+      receivedAt: true,
+      processedAt: true,
+      dataSnapshot: true,
+    },
+  });
+}
 
+export async function listPrivacyRequests(shop: string) {
   return db.privacyRequest.findMany({
     where: {
       shop,

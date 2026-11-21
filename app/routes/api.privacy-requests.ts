@@ -1,6 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
-import { listPrivacyRequests } from "../services/privacy.server";
+import {
+  getPrivacyRequestExport,
+  listPrivacyRequests,
+} from "../services/privacy.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -15,7 +18,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   if (requestId) {
-    const privacyRequest = await listPrivacyRequests(session.shop, requestId);
+    const privacyRequest = await getPrivacyRequestExport(
+      session.shop,
+      requestId,
+    );
 
     if (!privacyRequest) {
       return Response.json(

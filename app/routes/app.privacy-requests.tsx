@@ -4,14 +4,12 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import { listPrivacyRequests } from "../services/privacy.server";
 
-type PrivacyRequestListItem = Awaited<ReturnType<typeof listPrivacyRequests>>[number];
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const requests = await listPrivacyRequests(session.shop);
 
   return {
-    requests: requests.map((item: PrivacyRequestListItem) => ({
+    requests: requests.map((item) => ({
       ...item,
       receivedAt: item.receivedAt.toISOString(),
       processedAt: item.processedAt?.toISOString() ?? null,
@@ -81,7 +79,7 @@ export default function PrivacyRequestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {requests.map((item: (typeof requests)[number]) => (
+                {requests.map((item) => (
                   <tr key={item.id} style={{ borderTop: "1px solid #edf0f1" }}>
                     <td style={{ padding: 14 }}>{item.id}</td>
                     <td style={{ padding: 14 }}>
