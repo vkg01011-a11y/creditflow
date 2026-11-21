@@ -14,6 +14,7 @@ test("reverses cashback proportionally for a partial refund", () => {
     amount: "50.00",
     cumulativeRefundedBaseAmount: "500.00",
     targetReversedAmount: "50.00",
+    fullyReversed: false,
   });
 });
 
@@ -29,6 +30,7 @@ test("calculates the incremental debit across multiple partial refunds", () => {
     amount: "25.00",
     cumulativeRefundedBaseAmount: "500.00",
     targetReversedAmount: "50.00",
+    fullyReversed: false,
   });
 });
 
@@ -44,6 +46,7 @@ test("caps cumulative reversals at the original reward grant", () => {
     amount: "15.00",
     cumulativeRefundedBaseAmount: "500.00",
     targetReversedAmount: "75.00",
+    fullyReversed: true,
   });
 });
 
