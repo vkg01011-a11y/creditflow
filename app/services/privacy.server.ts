@@ -172,6 +172,7 @@ export async function processCustomerDataRequest({
         errorMessage: true,
         issuedAt: true,
         reversedAmount: true,
+        rewardBaseAmount: true,
         createdAt: true,
         updatedAt: true,
       },

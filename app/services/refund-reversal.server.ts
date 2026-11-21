@@ -98,6 +98,24 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
     });
     if (!grant) return { kind: "SKIP" as const };
 
+    const writeReview = async (reason: string) => {
+      await tx.creditReversal.create({
+        data: {
+          shop,
+          refundGid: refund.refundGid,
+          webhookId,
+          orderGid: refund.orderGid,
+          creditGrantId: grant.id,
+          refundedBaseAmount: "0",
+          amount: "0",
+          currencyCode: grant.currencyCode,
+          status: "REVIEW_REQUIRED",
+          errorMessage: reason.slice(0, 2000),
+        },
+      });
+      return { kind: "REVIEW" as const, reason };
+    };
+
     const existing = await tx.creditReversal.findUnique({
       where: { shop_refundGid_creditGrantId: {
         shop, refundGid: refund.refundGid, creditGrantId: grant.id,
@@ -113,12 +131,13 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
 
     if (grant.status === "REVERSED") return { kind: "SKIP" as const };
     if (grant.status !== "ISSUED" && grant.status !== "PARTIALLY_REVERSED") {
-      return { kind: "REVIEW" as const, reason: "The cashback grant is in " +
-        grant.status + " state and must be reconciled before it can be reversed." };
+      return writeReview("The cashback grant is in " + grant.status +
+        " state and must be reconciled before it can be reversed.");
     }
     if (!grant.rewardBaseAmount || grant.rewardBaseAmount.lte(0)) {
-      return { kind: "REVIEW" as const, reason:
-        "The grant has no stored reward basis. This legacy grant needs manual reconciliation." };
+      return writeReview(
+        "The grant has no stored reward basis. This legacy grant needs manual reconciliation.",
+      );
     }
 
     const unresolved = await tx.creditReversal.findFirst({
@@ -126,15 +145,17 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
       orderBy: { createdAt: "asc" },
     });
     if (unresolved) {
-      return { kind: "REVIEW" as const, reason:
-        "A previous reversal has an uncertain outcome. Reconcile its Shopify transaction before another debit." };
+      return writeReview(
+        "A previous reversal has an uncertain outcome. Reconcile its Shopify transaction before another debit.",
+      );
     }
 
     let refundBaseAmount: string;
     try { refundBaseAmount = selectRefundBase(refund, grant); }
     catch (error) {
-      return { kind: "REVIEW" as const, reason:
-        error instanceof Error ? error.message : "Refund basis could not be calculated." };
+      return writeReview(
+        error instanceof Error ? error.message : "Refund basis could not be calculated.",
+      );
     }
 
     const prior = await tx.creditReversal.findMany({
@@ -153,13 +174,14 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
         prior.map((item) => item.amount.toString()), grant.currencyCode,
       );
     } catch (error) {
-      return { kind: "REVIEW" as const, reason:
-        error instanceof Error ? error.message : "Prior reversals could not be reconciled." };
+      return writeReview(
+        error instanceof Error ? error.message : "Prior reversals could not be reconciled.",
+      );
     }
 
     const storedReversedAmount = grant.reversedAmount?.toString() ?? "0";
     if (sumMoneyAmounts([storedReversedAmount], grant.currencyCode) !== priorReversedAmount) {
-      return { kind: "REVIEW" as const, reason: "Grant reversal totals do not match the reversal ledger." };
+      return writeReview("Grant reversal totals do not match the reversal ledger.");
     }
 
     let calculation: ReturnType<typeof calculateProportionalReversal>;
@@ -173,8 +195,9 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
         currencyCode: grant.currencyCode,
       });
     } catch (error) {
-      return { kind: "REVIEW" as const, reason:
-        error instanceof Error ? error.message : "Proportional reversal could not be calculated." };
+      return writeReview(
+        error instanceof Error ? error.message : "Proportional reversal could not be calculated.",
+      );
     }
 
     const amountIsZero = /^0(?:\.0+)?$/.test(calculation.amount);
@@ -228,9 +251,15 @@ export async function processRefund({ db, admin, shop, webhookId, refund }: {
       "Waiting for the order's fulfillment reward to finish before reconciling its refund." };
   }
 
-  if (allGrants.some((grant) =>
+  const unresolvedGrants = allGrants.filter((grant) =>
     grant.status === "PROCESSING" || grant.status === "REVIEW_REQUIRED"
-  )) {
+  );
+  if (unresolvedGrants.length > 0) {
+    for (const grant of unresolvedGrants) {
+      await reserveReversal({
+        db, shop, refund, webhookId, grantId: grant.id,
+      });
+    }
     return { status: "REVIEW_REQUIRED", reason:
       "The order has a cashback grant with an uncertain outcome. Reconcile it before processing the refund." };
   }
