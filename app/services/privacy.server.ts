@@ -236,10 +236,20 @@ export async function processCustomerDataRequest({
     db.webhookEvent.findMany({
       where: {
         shop,
-        payload: {
-          path: ["customerGid"],
-          equals: customerGid,
-        },
+        OR: [
+          {
+            payload: {
+              path: ["customerGid"],
+              equals: customerGid,
+            },
+          },
+          ...normalized.requestedOrderIds.map((orderGid) => ({
+            payload: {
+              path: ["orderGid"],
+              equals: orderGid,
+            },
+          })),
+        ],
       },
       orderBy: { receivedAt: "asc" },
       select: {
@@ -418,13 +428,28 @@ export async function processCustomerRedaction({
 
     await tx.notification.deleteMany({ where: { shop, customerGid } });
 
+    const customerOrderIds = Array.from(new Set([
+      ...normalized.requestedOrderIds,
+      ...grants.map((grant) => grant.orderGid),
+    ]));
+
     await tx.webhookEvent.deleteMany({
       where: {
         shop,
-        payload: {
-          path: ["customerGid"],
-          equals: customerGid,
-        },
+        OR: [
+          {
+            payload: {
+              path: ["customerGid"],
+              equals: customerGid,
+            },
+          },
+          ...customerOrderIds.map((orderGid) => ({
+            payload: {
+              path: ["orderGid"],
+              equals: orderGid,
+            },
+          })),
+        ],
       },
     });
 
