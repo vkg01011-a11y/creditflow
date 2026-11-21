@@ -128,10 +128,14 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
 
       // A crashed worker can leave a reservation PROCESSING. After the same
       // 15-minute lease used by the queue, expose it as manual-review work.
-      if (
-        existing.status === "PROCESSING" &&
-        Date.now() - existing.updatedAt.getTime() >= 15 * 60 * 1000
-      ) {
+      if (existing.status === "PROCESSING") {
+        if (Date.now() - existing.updatedAt.getTime() < 15 * 60 * 1000) {
+          return {
+            kind: "WAIT" as const,
+            reason: "This refund debit is currently being processed by another worker.",
+          };
+        }
+
         const reason =
           "The previous worker lease expired before the debit outcome was confirmed. Reconcile Shopify's store-credit transactions before retrying.";
         await tx.creditReversal.update({
@@ -161,6 +165,26 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
       orderBy: { createdAt: "asc" },
     });
     if (unresolved) {
+      if (
+        unresolved.status === "PROCESSING" &&
+        Date.now() - unresolved.updatedAt.getTime() < 15 * 60 * 1000
+      ) {
+        return {
+          kind: "WAIT" as const,
+          reason: "Another refund debit for this cashback grant is currently in progress.",
+        };
+      }
+
+      if (unresolved.status === "PROCESSING") {
+        await tx.creditReversal.update({
+          where: { id: unresolved.id },
+          data: {
+            status: "REVIEW_REQUIRED",
+            errorMessage: "The previous worker lease expired before the debit outcome was confirmed. Reconcile Shopify's store-credit transactions.",
+          },
+        });
+      }
+
       return writeReview(
         "A previous reversal has an uncertain outcome. Reconcile its Shopify transaction before another debit.",
       );
@@ -288,6 +312,9 @@ export async function processRefund({ db, admin, shop, webhookId, refund }: {
     const reservation = await reserveReversal({
       db, shop, refund, webhookId, grantId: candidate.id,
     });
+    if (reservation.kind === "WAIT") {
+      return { status: "RETRY", reason: reservation.reason };
+    }
     if (reservation.kind === "REVIEW") {
       return { status: "REVIEW_REQUIRED", reason: reservation.reason };
     }
