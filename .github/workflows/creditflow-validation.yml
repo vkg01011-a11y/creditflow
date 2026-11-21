@@ -36,7 +36,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/creditflow_ci?schema=public
-      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/creditflow_ci?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/creditflow_shadow?schema=public
       SHOPIFY_API_KEY: creditflow-ci-placeholder
       SHOPIFY_API_SECRET: creditflow-ci-placeholder
       SHOPIFY_APP_URL: https://example.com
@@ -60,6 +60,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: npx prisma generate
+
+      - name: Create a separate Prisma shadow database
+        run: PGPASSWORD=postgres createdb --host=localhost --username=postgres creditflow_shadow
 
       - name: Apply all migrations to a clean PostgreSQL database
         run: npx prisma migrate deploy
