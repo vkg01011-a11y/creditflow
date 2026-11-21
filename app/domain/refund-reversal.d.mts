@@ -12,4 +12,5 @@ export function calculateProportionalReversal(input: {
   amount: string;
   cumulativeRefundedBaseAmount: string;
   targetReversedAmount: string;
+  fullyReversed: boolean;
 };

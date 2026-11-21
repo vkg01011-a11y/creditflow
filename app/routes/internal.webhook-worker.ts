@@ -7,6 +7,7 @@ import { unauthenticated } from "../shopify.server";
 import { MAX_WEBHOOK_ATTEMPTS, getWebhookRetryDelayMs } from "../domain/webhook-retry.mjs";
 import { processFulfilledOrder } from "../services/fulfillment-reward.server";
 import type { ShopifyFulfilledOrder } from "../services/fulfillment-reward.server";
+import { processRefund, type NormalizedRefundPayload } from "../services/refund-reversal.server";
 import {
   processCustomerDataRequest,
   processCustomerRedaction,
@@ -17,6 +18,7 @@ type WebhookJob = {
   id: string;
   shop: string;
   topic: string;
+  webhookId: string;
   payload: Prisma.JsonValue | null;
   attemptCount: number;
 };
@@ -35,6 +37,9 @@ type Counts = {
   webhooksRetryPending: number;
   webhooksReviewRequired: number;
   webhooksFailed: number;
+  refundsProcessed: number;
+  refundsRetryPending: number;
+  refundsReviewRequired: number;
   privacyProcessed: number;
   privacyRetryPending: number;
   privacyFailed: number;
@@ -79,7 +84,7 @@ async function claimWebhookJobs(limit: number, workerId: string) {
     '  "updatedAt" = NOW()',
     'FROM picked',
     'WHERE event."id" = picked."id"',
-    'RETURNING event."id", event."shop", event."topic", event."payload", event."attemptCount"',
+    'RETURNING event."id", event."shop", event."webhookId", event."topic", event."payload", event."attemptCount"',
   ].join("\n");
 
   return db.$queryRawUnsafe<WebhookJob[]>(sql, limit, workerId);
@@ -244,6 +249,46 @@ async function processWebhookJob(
       lastError: "The queued webhook payload is missing or invalid.",
     });
     counts.webhooksFailed += 1;
+    return;
+  }
+
+  if (job.topic === "REFUNDS_CREATE") {
+    try {
+      const { admin } = await unauthenticated.admin(job.shop);
+      const result = await processRefund({
+        db,
+        admin,
+        shop: job.shop,
+        webhookId: job.webhookId,
+        refund: payload as unknown as NormalizedRefundPayload,
+      });
+
+      if (result.status === "PROCESSED") {
+        await updateWebhookJob(job, workerId, {
+          status: "PROCESSED", processedAt: new Date(), lastError: null,
+        });
+        counts.refundsProcessed += 1;
+      } else if (result.status === "REVIEW_REQUIRED" || job.attemptCount >= MAX_WEBHOOK_ATTEMPTS) {
+        await updateWebhookJob(job, workerId, {
+          status: "REVIEW_REQUIRED", lastError: result.reason.slice(0, 2000),
+        });
+        counts.refundsReviewRequired += 1;
+      } else {
+        await updateWebhookJob(job, workerId, {
+          status: "RECEIVED",
+          nextAttemptAt: new Date(Date.now() + getWebhookRetryDelayMs(job.attemptCount)),
+          lastError: result.reason.slice(0, 2000),
+        });
+        counts.refundsRetryPending += 1;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown refund processing error";
+      await updateWebhookJob(job, workerId, {
+        status: "REVIEW_REQUIRED", lastError: message.slice(0, 2000),
+      });
+      counts.refundsReviewRequired += 1;
+      console.error("[CreditFlow] Refund reconciliation failed for event", job.id, message);
+    }
     return;
   }
 
@@ -466,6 +511,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     webhooksRetryPending: 0,
     webhooksReviewRequired: 0,
     webhooksFailed: 0,
+    refundsProcessed: 0,
+    refundsRetryPending: 0,
+    refundsReviewRequired: 0,
     privacyProcessed: 0,
     privacyRetryPending: 0,
     privacyFailed: 0,

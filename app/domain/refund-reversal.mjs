@@ -56,5 +56,6 @@ export function calculateProportionalReversal({
     amount: fromMinorUnits(incrementalMinor, currencyCode),
     cumulativeRefundedBaseAmount: fromMinorUnits(cumulativeRefundedMinor, currencyCode),
     targetReversedAmount: fromMinorUnits(targetReversedMinor, currencyCode),
+    fullyReversed: targetReversedMinor >= grantMinor,
   };
 }
