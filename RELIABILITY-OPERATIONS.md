@@ -62,3 +62,16 @@ The endpoint scopes every lookup to the authenticated shop. Treat the response a
 ## Operational limitation
 
 This change adds the durable queues and a protected HTTP worker endpoint; it does not create a scheduler in your hosting account. Until a scheduler is configured and verified, webhook jobs remain queued in PostgreSQL.
+
+## Cashback reversal handling for refunds/create
+
+- The app subscribes to Shopify's \`refunds/create\` topic and stores a minimized refund payload before acknowledging delivery.
+- The worker reconciles each refund against cashback grants for the same order. Newly issued grants store the original reward basis.
+- Partial cashback reversals are calculated proportionally from refunded merchandise line subtotals. Cumulative refunds and cashback debits are capped at the original reward basis and grant.
+- Product-filtered reward rules use refunded product IDs to identify eligible refunded items.
+- A unique reversal reservation is committed before calling Shopify's native \`storeCreditAccountDebit\` mutation. The Shopify transaction ID is then recorded in CreditFlow's reversal and debit ledger.
+- Duplicate refund deliveries reuse the same \`shop + refund GID + grant\` record and do not issue a second debit.
+- Insufficient store credit, old grants without a saved reward basis, missing product/currency data, and ambiguous debit outcomes move to \`REVIEW_REQUIRED\`. CreditFlow does not automatically retry an uncertain debit.
+- Review records under **Refund reversals** in the embedded app. Inspect Shopify's customer store-credit transaction history before any manual adjustment.
+- Existing grants created before the reward-basis migration have a null basis and require manual review for refunds.
+- New automation rules are created paused by default; merchants must review and activate them deliberately.

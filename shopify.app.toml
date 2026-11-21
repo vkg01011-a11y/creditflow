@@ -41,3 +41,7 @@ compliance_topics = ["customers/redact"]
 [[webhooks.subscriptions]]
 uri = "/webhooks/shop/redact"
 compliance_topics = ["shop/redact"]
+
+[[webhooks.subscriptions]]
+uri = "/webhooks/refunds/create"
+topics = ["refunds/create"]
