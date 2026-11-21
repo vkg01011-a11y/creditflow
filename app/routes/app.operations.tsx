@@ -60,12 +60,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }),
     ]);
 
-  const actionRequiredWebhooks = webhookRows.filter((item) =>
-    item.status === "FAILED" || item.status === "REVIEW_REQUIRED",
-  ).length;
-  const actionRequiredPrivacy = privacyRows.filter((item) =>
-    item.status === "FAILED" || item.status === "REVIEW_REQUIRED",
-  ).length;
+  const actionRequiredWebhooks = webhookGroups
+    .filter((item) => item.status === "FAILED" || item.status === "REVIEW_REQUIRED")
+    .reduce((sum, item) => sum + item._count._all, 0);
+  const actionRequiredPrivacy = privacyGroups
+    .filter((item) => item.status === "FAILED" || item.status === "REVIEW_REQUIRED")
+    .reduce((sum, item) => sum + item._count._all, 0);
 
   return {
     webhookGroups: webhookGroups.map((item) => ({

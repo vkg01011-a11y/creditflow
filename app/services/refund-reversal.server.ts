@@ -66,10 +66,18 @@ function selectRefundBase(refund: NormalizedRefundPayload, grant: {
     throw new Error("A refund line is missing its product ID, so eligible-item cashback cannot be calculated safely.");
   }
 
+  if (refund.lineItems.length === 0) {
+    throw new Error(
+      "The refund contains no merchandise line items. Review it manually before changing store credit.",
+    );
+  }
+
   const selected: string[] = [];
   for (const item of refund.lineItems) {
-    if (item.currencyCode && item.currencyCode !== currencyCode) {
-      throw new Error("Refund currency " + item.currencyCode + " does not match reward currency " + currencyCode + ".");
+    if (!item.currencyCode || item.currencyCode !== currencyCode) {
+      throw new Error(
+        "Refund line currency is missing or does not match reward currency " + currencyCode + ".",
+      );
     }
     const included =
       grant.rule.rewardBase === "ORDER_SUBTOTAL" ||
