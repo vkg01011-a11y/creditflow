@@ -60,24 +60,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }),
     ]);
 
-  const webhookCounts = Object.fromEntries(
-    webhookGroups.map((item) => [
-      item.status,
-      (webhookGroups
-        .filter((entry) => entry.status === item.status)
-        .reduce((sum, entry) => sum + entry._count._all, 0)),
-    ]),
-  );
-
-  const privacyCounts = Object.fromEntries(
-    privacyGroups.map((item) => [
-      item.status,
-      privacyGroups
-        .filter((entry) => entry.status === item.status)
-        .reduce((sum, entry) => sum + entry._count._all, 0),
-    ]),
-  );
-
   const actionRequiredWebhooks = webhookRows.filter((item) =>
     item.status === "FAILED" || item.status === "REVIEW_REQUIRED",
   ).length;
