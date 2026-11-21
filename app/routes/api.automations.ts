@@ -9,6 +9,7 @@ import type {
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { activateMerchant } from "../services/merchant.server";
+import { decimalPattern } from "../domain/decimal-validation.mjs";
 
 type JsonObject = Record<string, unknown>;
 
@@ -109,9 +110,7 @@ function decimalValue(
   const text = String(value).trim();
   const decimals = options.maxDecimals ?? 6;
 
-  const pattern = new RegExp(
-    `^\\d{1,14}(?:\\.\\d{1,${decimals}})?$`,
-  );
+  const pattern = decimalPattern(decimals);
 
   if (!pattern.test(text)) {
     throw new Error(`${field} is not a valid decimal amount.`);

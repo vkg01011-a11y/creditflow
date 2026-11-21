@@ -447,10 +447,6 @@ export default function AutomationsPage() {
     (rule) => !rule.archivedAt && !rule.enabled,
   );
 
-  const archivedRules = data.rules.filter(
-    (rule) => Boolean(rule.archivedAt),
-  );
-
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase();
 
@@ -1406,7 +1402,11 @@ export default function AutomationsPage() {
             border-radius: 8px;
           }
 
-          .cfa-check-content { min-width: 0; }
+          .cfa-check-content {
+            display: block;
+            min-width: 0;
+            cursor: pointer;
+          }
 
           .cfa-check-title {
             color: #3c4940;
@@ -1540,6 +1540,14 @@ export default function AutomationsPage() {
           }
 
           .cfa-product-item:last-child { border-bottom: 0; }
+
+          .cfa-product-item > label {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            min-width: 0;
+            cursor: pointer;
+          }
 
           .cfa-product-name {
             color: #354138;
@@ -2112,26 +2120,27 @@ export default function AutomationsPage() {
                                   const id = legacyProductId(product.id);
 
                                   return (
-                                    <label
+                                    <div
                                       className="cfa-product-item"
                                       key={product.id}
                                     >
                                       <input
+                                        id={`cf-product-${id}`}
                                         type="checkbox"
                                         checked={form.productIds.includes(id)}
                                         onChange={(event) =>
                                           toggleProduct(id, event.target.checked)
                                         }
                                       />
-                                      <span>
+                                      <label htmlFor={`cf-product-${id}`}>
                                         <span className="cfa-product-name">
                                           {product.title}
                                         </span>
                                         <span className="cfa-product-handle">
                                           /{product.handle}
                                         </span>
-                                      </span>
-                                    </label>
+                                      </label>
+                                    </div>
                                   );
                                 })
                               )}
@@ -2170,8 +2179,9 @@ export default function AutomationsPage() {
                       </div>
 
                       <div className="cfa-field cfa-field--full">
-                        <label className="cfa-check-row">
+                        <div className="cfa-check-row">
                           <input
+                            id="cf-require-prepaid"
                             type="checkbox"
                             checked={form.requirePrepaid}
                             onChange={(event) =>
@@ -2181,7 +2191,10 @@ export default function AutomationsPage() {
                               })
                             }
                           />
-                          <span className="cfa-check-content">
+                          <label
+                            className="cfa-check-content"
+                            htmlFor="cf-require-prepaid"
+                          >
                             <span className="cfa-check-title">
                               Prepaid orders only
                             </span>
@@ -2189,8 +2202,8 @@ export default function AutomationsPage() {
                               Restrict the reward to orders identified as paid and
                               not using a COD gateway.
                             </span>
-                          </span>
-                        </label>
+                          </label>
+                        </div>
                       </div>
 
                       <div className="cfa-field cfa-field--full">
@@ -2493,8 +2506,9 @@ export default function AutomationsPage() {
                       </div>
 
                       <div className="cfa-field cfa-field--full">
-                        <label className="cfa-check-row">
+                        <div className="cfa-check-row">
                           <input
+                            id="cf-notify-customer"
                             type="checkbox"
                             checked={form.notifyCustomer}
                             onChange={(event) =>
@@ -2504,16 +2518,19 @@ export default function AutomationsPage() {
                               })
                             }
                           />
-                          <span className="cfa-check-content">
+                          <label
+                            className="cfa-check-content"
+                            htmlFor="cf-notify-customer"
+                          >
                             <span className="cfa-check-title">
                               Notify customer when credit is issued
                             </span>
                             <span className="cfa-check-help">
-                              Use Shopify's native store-credit notification
+                              Use Shopify&apos;s native store-credit notification
                               where supported.
                             </span>
-                          </span>
-                        </label>
+                          </label>
+                        </div>
                       </div>
 
                       <div className="cfa-field cfa-field--full">
@@ -2540,7 +2557,7 @@ export default function AutomationsPage() {
 
                         <span className="cfa-help">
                           Illustrative calculation. Actual rewards use the
-                          qualifying order's values and currency.
+                          qualifying order&apos;s values and currency.
                         </span>
                       </div>
                     </div>
