@@ -70,6 +70,21 @@ enum NotificationStatus {
   FAILED
 }
 
+enum PrivacyRequestType {
+  CUSTOMERS_DATA_REQUEST
+  CUSTOMERS_REDACT
+  SHOP_REDACT
+}
+
+enum PrivacyRequestStatus {
+  RECEIVED
+  PROCESSING
+  RETRY_PENDING
+  COMPLETED
+  FAILED
+  REVIEW_REQUIRED
+}
+
 // ============================================================
 // SHOPIFY AUTHENTICATION SESSION
 // Preserve the model required by Shopify's session adapter.
@@ -279,7 +294,10 @@ model WebhookEvent {
   status        WebhookEventStatus @default(RECEIVED)
   attemptCount  Int               @default(0)
 
+  payload       Json?
   payloadHash   String?
+  lockedAt      DateTime?
+  lockedBy      String?
   lastError     String?           @db.Text
 
   receivedAt    DateTime          @default(now())
@@ -293,7 +311,37 @@ model WebhookEvent {
 
   @@unique([shop, webhookId])
   @@index([shop, status, receivedAt])
-  @@index([status, nextAttemptAt])
+  @@index([status, nextAttemptAt, receivedAt])
+}
+
+// ============================================================
+// PRIVACY REQUEST INBOX
+// Minimal authenticated Shopify compliance requests and data exports.
+// No Merchant foreign key: redaction must be able to remove shop rows.
+// ============================================================
+
+model PrivacyRequest {
+  id                 String               @id @default(cuid())
+  shop               String
+  webhookId          String
+  type               PrivacyRequestType
+  status             PrivacyRequestStatus @default(RECEIVED)
+  customerKey        String?
+  requestedOrderIds  Json?
+  payload            Json?
+  dataSnapshot       Json?
+  attemptCount       Int                  @default(0)
+  lockedAt           DateTime?
+  lockedBy           String?
+  nextAttemptAt      DateTime?
+  receivedAt         DateTime             @default(now())
+  processedAt        DateTime?
+  lastError          String?              @db.Text
+
+  @@unique([shop, webhookId])
+  @@index([shop, type, receivedAt(sort: Desc)])
+  @@index([shop, customerKey])
+  @@index([status, nextAttemptAt, receivedAt])
 }
 
 // ============================================================
