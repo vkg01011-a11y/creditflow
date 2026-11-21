@@ -125,6 +125,22 @@ async function reserveReversal({ db, shop, refund, webhookId, grantId }: {
       if (existing.status === "REVERSED" || existing.status === "NO_REVERSAL") {
         return { kind: "DONE" as const };
       }
+
+      // A crashed worker can leave a reservation PROCESSING. After the same
+      // 15-minute lease used by the queue, expose it as manual-review work.
+      if (
+        existing.status === "PROCESSING" &&
+        Date.now() - existing.updatedAt.getTime() >= 15 * 60 * 1000
+      ) {
+        const reason =
+          "The previous worker lease expired before the debit outcome was confirmed. Reconcile Shopify's store-credit transactions before retrying.";
+        await tx.creditReversal.update({
+          where: { id: existing.id },
+          data: { status: "REVIEW_REQUIRED", errorMessage: reason },
+        });
+        return { kind: "REVIEW" as const, reason };
+      }
+
       return { kind: "REVIEW" as const, reason: existing.errorMessage ||
         "A reversal for this refund already exists without a confirmed outcome." };
     }
