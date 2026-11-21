@@ -1,5 +1,9 @@
 
-import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import type {
+  HeadersFunction,
+  LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
+} from "react-router";
 
 import {
   Outlet,
@@ -19,6 +23,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     apiKey: process.env.SHOPIFY_API_KEY || "",
   };
+};
+
+// This route only provides the static Shopify API key to AppProvider.
+// Dashboard, Automations, and API resource routes authenticate their own data.
+// Keep this shell loader out of revalidation while navigation stays inside /app.
+export const shouldRevalidate = ({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) => {
+  const isAdminAppPath = (pathname: string) =>
+    pathname === "/app" || pathname.startsWith("/app/");
+  const staysInsideAdminApp =
+    isAdminAppPath(currentUrl.pathname) &&
+    isAdminAppPath(nextUrl.pathname);
+
+  return staysInsideAdminApp ? false : defaultShouldRevalidate;
 };
 
 export default function App() {

@@ -106,6 +106,8 @@ model Merchant {
   shopName            String?
   contactEmail        String?
   primaryCurrencyCode String?        @db.VarChar(3)
+  shopMetadataSyncedAt DateTime?
+  shopMetadataRetryAfter DateTime?
   timezone            String?
   status              MerchantStatus @default(ACTIVE)
   installedAt         DateTime       @default(now())
@@ -176,7 +178,7 @@ model AutomationRule {
 
   @@index([shop, enabled, trigger, priority])
   @@index([shop, createdAt])
-  @@index([shop, archivedAt])
+  @@index([shop, archivedAt, priority, createdAt(sort: Desc)])
 }
 
 // ============================================================
@@ -256,6 +258,8 @@ model CreditLedgerEntry {
   @@index([shop, customerGid, createdAt])
   @@index([shop, orderGid])
   @@index([shop, transactionType, createdAt])
+  @@index([shop, direction, createdAt])
+  @@index([shop, createdAt])
   @@index([creditGrantId])
 }
 

@@ -8,7 +8,6 @@ import type {
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { activateMerchant } from "../services/merchant.server";
 import { decimalPattern } from "../domain/decimal-validation.mjs";
 
 type JsonObject = Record<string, unknown>;
@@ -568,9 +567,6 @@ function serializeRule(rule: AutomationRule) {
 
 async function getAuthenticatedShop(request: Request) {
   const { session } = await authenticate.admin(request);
-
-  await activateMerchant(session.shop);
-
   return session.shop;
 }
 

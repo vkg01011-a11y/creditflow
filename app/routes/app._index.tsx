@@ -5,6 +5,7 @@ import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { getShopMetadata } from "../services/merchant.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -18,9 +19,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     creditAdded,
     creditDeducted,
     activeAutomations,
-    customerGroups,
+    customerCountRows,
     recentRows,
-    shopResponse,
+    shopMetadata,
   ] = await Promise.all([
     db.creditLedgerEntry.aggregate({
       where: {
@@ -46,10 +47,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: { shop, enabled: true },
     }),
 
-    db.creditLedgerEntry.groupBy({
-      by: ["customerGid"],
-      where: { shop },
-    }),
+    // Count distinct customers in PostgreSQL without transferring every
+    // grouped customer row into the Node.js process.
+    db.$queryRaw<Array<{ customerCount: bigint }>>`
+      SELECT COUNT(DISTINCT "customerGid")::bigint AS "customerCount"
+      FROM "CreditLedgerEntry"
+      WHERE "shop" = ${shop}
+    `,
 
     db.creditLedgerEntry.findMany({
       where: { shop },
@@ -68,36 +72,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       },
     }),
 
-    admin.graphql(`#graphql
-      query CreditFlowDashboardShop {
-        shop {
-          name
-          currencyCode
+    getShopMetadata(shop, () =>
+      admin.graphql(`#graphql
+        query CreditFlowDashboardShop {
+          shop {
+            name
+            currencyCode
+          }
         }
-      }
-    `).catch(() => null),
+      `),
+    ),
   ]);
 
-  let storeName = shop;
-  let currencyCode: string | null = null;
-
-  if (shopResponse) {
-    try {
-      const responseJson = await shopResponse.json();
-      const shopInfo = responseJson?.data?.shop;
-
-      if (shopInfo?.name) storeName = shopInfo.name;
-      if (shopInfo?.currencyCode) {
-        currencyCode = shopInfo.currencyCode;
-      }
-    } catch (error) {
-      console.warn("Unable to load Shopify store details:", error);
-    }
-  }
-
   return {
-    storeName,
-    currencyCode,
+    storeName: shopMetadata.storeName,
+    currencyCode: shopMetadata.currencyCode,
 
     creditAdded: creditAdded._sum.amount?.toString() ?? "0",
     creditAddedCount: creditAdded._count._all,
@@ -106,7 +95,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     creditDeductedCount: creditDeducted._count._all,
 
     activeAutomations,
-    customersWithActivity: customerGroups.length,
+    customersWithActivity: Number(
+      customerCountRows[0]?.customerCount ?? 0,
+    ),
 
     recentTransactions: recentRows.map((entry) => ({
       id: entry.id,

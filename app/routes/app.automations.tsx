@@ -6,12 +6,23 @@ import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { activateMerchant } from "../services/merchant.server";
+import { getShopMetadata } from "../services/merchant.server";
 
 type ProductOption = {
   id: string;
   title: string;
   handle: string;
+};
+
+type ProductCatalogResponse = {
+  products?: ProductOption[];
+  selectedProducts?: ProductOption[];
+  pageInfo?: {
+    hasNextPage: boolean;
+    endCursor: string | null;
+  };
+  after?: string | null;
+  error?: string;
 };
 
 type ConditionField =
@@ -100,6 +111,8 @@ type Notice = {
 };
 
 type Filter = "ALL" | "ACTIVE" | "PAUSED" | "ARCHIVED";
+
+const MAX_SELECTED_PRODUCTS = 500;
 
 const CONDITION_FIELDS: Array<{
   value: ConditionField;
@@ -257,11 +270,17 @@ function legacyProductId(id: string) {
 
 function formatMoney(
   value: string | number | null | undefined,
-  currencyCode: string,
+  currencyCode: string | null,
 ) {
   const amount = Number(value ?? 0);
 
   if (!Number.isFinite(amount)) return "—";
+
+  if (!currencyCode) {
+    return new Intl.NumberFormat(undefined, {
+      maximumFractionDigits: 2,
+    }).format(amount);
+  }
 
   try {
     return new Intl.NumberFormat(undefined, {
@@ -274,7 +293,7 @@ function formatMoney(
   }
 }
 
-function formatReward(rule: Rule, currency: string) {
+function formatReward(rule: Rule, currency: string | null) {
   if (rule.rewardType === "PERCENTAGE") {
     return `${rule.percentage ?? "0"}% cashback`;
   }
@@ -309,9 +328,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  await activateMerchant(shop);
-
-  const [rules, shopResponse] = await Promise.all([
+  const [rules, shopMetadata] = await Promise.all([
     db.automationRule.findMany({
       where: { shop },
       orderBy: [
@@ -321,71 +338,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ],
     }),
 
-    admin.graphql(`#graphql
-      query CreditFlowAutomationSetup {
-        shop {
-          name
-          currencyCode
-        }
-        products(first: 100, sortKey: TITLE) {
-          nodes {
-            id
-            title
-            handle
+    getShopMetadata(shop, () =>
+      admin.graphql(`#graphql
+        query CreditFlowAutomationShop {
+          shop {
+            name
+            currencyCode
           }
         }
-      }
-    `).catch((error: unknown) => {
-      console.error(
-        "[CreditFlow] Shopify product request failed:",
-        error,
-      );
-      return null;
-    }),
+      `),
+    ),
   ]);
 
-  let storeName = shop;
-  let currencyCode = "INR";
-  let products: ProductOption[] = [];
-
-  if (shopResponse) {
-    try {
-      const response = (await shopResponse.json()) as {
-        errors?: Array<{ message?: string }>;
-        data?: {
-          shop?: {
-            name?: string;
-            currencyCode?: string;
-          };
-          products?: {
-            nodes?: ProductOption[];
-          };
-        };
-      };
-
-      if (response.errors?.length) {
-        console.error(
-          "[CreditFlow] Shopify GraphQL errors:",
-          response.errors,
-        );
-      }
-
-      storeName = response.data?.shop?.name || shop;
-      currencyCode =
-        response.data?.shop?.currencyCode || "INR";
-      products = response.data?.products?.nodes || [];
-    } catch (error) {
-      console.error(
-        "[CreditFlow] Unable to process Shopify response:",
-        error,
-      );
-    }
-  }
-
   return {
-    storeName,
-    currencyCode,
-    products,
+    storeName: shopMetadata.storeName,
+    currencyCode: shopMetadata.currencyCode,
 
     rules: rules.map((rule) => ({
       id: rule.id,
@@ -417,8 +384,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       notifyCustomer: rule.notifyCustomer,
       createdAt: rule.createdAt.toISOString(),
       archivedAt:
-        (rule as typeof rule & { archivedAt?: Date | null }).archivedAt
-          ?.toISOString() ?? null,
+        (rule as typeof rule & { archivedAt?: Date | null })
+          .archivedAt?.toISOString() ?? null,
     })),
   };
 };
@@ -426,6 +393,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function AutomationsPage() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
+  const productsFetcher = useFetcher<ProductCatalogResponse>();
   const revalidator = useRevalidator();
 
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -435,9 +403,48 @@ export default function AutomationsPage() {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
   const [productSearch, setProductSearch] = useState("");
+  const [products, setProducts] = useState<ProductOption[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<ProductOption[]>([]);
+  const [activeProductQuery, setActiveProductQuery] = useState("");
+  const [productNextCursor, setProductNextCursor] = useState<string | null>(null);
+  const [hasMoreProducts, setHasMoreProducts] = useState(false);
+  const [productError, setProductError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const busy = fetcher.state !== "idle";
+  const productsBusy = productsFetcher.state !== "idle";
+
+  useEffect(() => {
+    const result = productsFetcher.data;
+    if (!result) return;
+
+    if (result.error) {
+      setProductError(result.error);
+      setHasMoreProducts(false);
+      return;
+    }
+
+    setProductError(null);
+    const incoming = result.products ?? [];
+
+    setProducts((current) => {
+      const combined = result.after
+        ? [...current, ...incoming]
+        : incoming;
+      const unique = new Map<string, ProductOption>();
+      for (const product of combined) {
+        unique.set(product.id, product);
+      }
+      return Array.from(unique.values());
+    });
+
+    if (result.selectedProducts) {
+      setSelectedProducts(result.selectedProducts);
+    }
+
+    setProductNextCursor(result.pageInfo?.endCursor ?? null);
+    setHasMoreProducts(Boolean(result.pageInfo?.hasNextPage));
+  }, [productsFetcher.data]);
 
   const activeRules = data.rules.filter(
     (rule) => !rule.archivedAt && rule.enabled,
@@ -447,17 +454,13 @@ export default function AutomationsPage() {
     (rule) => !rule.archivedAt && !rule.enabled,
   );
 
-  const filteredProducts = useMemo(() => {
-    const query = productSearch.trim().toLowerCase();
-
-    if (!query) return data.products;
-
-    return data.products.filter((product) =>
-      `${product.title} ${product.handle}`
-        .toLowerCase()
-        .includes(query),
-    );
-  }, [data.products, productSearch]);
+  const pickerProducts = useMemo(() => {
+    const unique = new Map<string, ProductOption>();
+    for (const product of [...selectedProducts, ...products]) {
+      unique.set(product.id, product);
+    }
+    return Array.from(unique.values());
+  }, [selectedProducts, products]);
 
   const filteredRules = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -538,10 +541,58 @@ export default function AutomationsPage() {
       method: "POST",
       action: "/api/automations",
       encType: "application/json",
+      // The success effect below explicitly revalidates once. Do not also
+      // trigger React Router's automatic loader revalidation for this action.
+      defaultShouldRevalidate: false,
     });
   }
 
+  function loadProductCatalog(
+    query = productSearch,
+    selectedProductIds: string[] = [],
+  ) {
+    const normalizedQuery = query.trim();
+    const params = new URLSearchParams();
+
+    if (normalizedQuery) params.set("q", normalizedQuery);
+    if (selectedProductIds.length > 0) {
+      params.set("selected", selectedProductIds.join(","));
+      setSelectedProducts([]);
+    }
+
+    setActiveProductQuery(normalizedQuery);
+    setProducts([]);
+    setProductNextCursor(null);
+    setHasMoreProducts(false);
+    setProductError(null);
+
+    const suffix = params.toString();
+    productsFetcher.load(
+      suffix
+        ? `/api/products?${suffix}`
+        : "/api/products",
+    );
+  }
+
+  function loadMoreProducts() {
+    if (
+      productsBusy ||
+      !hasMoreProducts ||
+      !productNextCursor
+    ) {
+      return;
+    }
+
+    const params = new URLSearchParams({ after: productNextCursor });
+    if (activeProductQuery) params.set("q", activeProductQuery);
+
+    productsFetcher.load(
+      `/api/products?${params.toString()}`,
+    );
+  }
+
   function openCreate() {
+    setSelectedProducts([]);
     setForm(initialForm());
     setEditingRuleId(null);
     setStep(1);
@@ -551,6 +602,13 @@ export default function AutomationsPage() {
   }
 
   function openEdit(rule: Rule) {
+    if (rule.productMode !== "ALL") {
+      setProductSearch("");
+      loadProductCatalog("", rule.productIds);
+    } else {
+      setSelectedProducts([]);
+    }
+
     setForm({
       name: rule.name,
       description: rule.description ?? "",
@@ -650,12 +708,40 @@ export default function AutomationsPage() {
   }
 
   function toggleProduct(productId: string, checked: boolean) {
+    if (
+      checked &&
+      !form.productIds.includes(productId) &&
+      form.productIds.length >= MAX_SELECTED_PRODUCTS
+    ) {
+      setNotice({
+        type: "error",
+        message: `A maximum of ${MAX_SELECTED_PRODUCTS} products can be selected per rule.`,
+      });
+      return;
+    }
+
+    const product = pickerProducts.find(
+      (item) => legacyProductId(item.id) === productId,
+    );
+
     setForm((current) => ({
       ...current,
       productIds: checked
-        ? [...current.productIds, productId]
+        ? Array.from(new Set([...current.productIds, productId]))
         : current.productIds.filter((id) => id !== productId),
     }));
+
+    if (checked && product) {
+      setSelectedProducts((current) =>
+        current.some((item) => item.id === product.id)
+          ? current
+          : [...current, product],
+      );
+    } else if (!checked) {
+      setSelectedProducts((current) =>
+        current.filter((item) => legacyProductId(item.id) !== productId),
+      );
+    }
   }
 
   function validateStepOne() {
@@ -1514,10 +1600,17 @@ export default function AutomationsPage() {
             overflow: hidden;
           }
 
-          .cfa-product-search { padding: 8px; border-bottom: 1px solid #edf0ed; }
+          .cfa-product-search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-bottom: 1px solid #edf0ed;
+          }
 
           .cfa-product-search input {
-            width: 100%;
+            flex: 1;
+            min-width: 0;
             min-height: 31px;
             padding: 7px 9px;
             border: 1px solid #dce3de;
@@ -2040,7 +2133,7 @@ export default function AutomationsPage() {
                     <div className="cfa-form-grid">
                       <div className="cfa-field">
                         <label className="cfa-label" htmlFor="cf-minimum">
-                          Minimum order value ({data.currencyCode})
+                          Minimum order value ({data.currencyCode ?? "store currency"})
                         </label>
                         <input
                           id="cf-minimum"
@@ -2072,6 +2165,14 @@ export default function AutomationsPage() {
                             const productMode =
                               event.target.value as FormState["productMode"];
 
+                            if (productMode !== "ALL" && form.productMode === "ALL") {
+                              loadProductCatalog("");
+                            }
+
+                            if (productMode === "ALL") {
+                              setSelectedProducts([]);
+                            }
+
                             setForm({
                               ...form,
                               productMode,
@@ -2095,61 +2196,130 @@ export default function AutomationsPage() {
                           <span className="cfa-label">
                             Select products ({form.productIds.length})
                           </span>
+                          {form.productIds.length > 0 && (
+                            <button
+                              type="button"
+                              className="cfa-button"
+                              style={{ marginBottom: 8 }}
+                              onClick={() => {
+                                setSelectedProducts([]);
+                                setForm((current) => ({
+                                  ...current,
+                                  productIds: [],
+                                }));
+                              }}
+                            >
+                              Clear selected products
+                            </button>
+                          )}
 
                           <div className="cfa-product-box">
-                            <div className="cfa-product-search">
+                            <form
+                              className="cfa-product-search"
+                              role="search"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                loadProductCatalog(productSearch);
+                              }}
+                            >
                               <input
                                 type="search"
                                 value={productSearch}
                                 onChange={(event) =>
                                   setProductSearch(event.target.value)
                                 }
-                                placeholder="Search products..."
+                                placeholder="Search the Shopify catalogue..."
+                                aria-label="Search Shopify products"
                               />
-                            </div>
+                              <button
+                                type="submit"
+                                className="cfa-button"
+                                disabled={productsBusy}
+                              >
+                                Search
+                              </button>
+                            </form>
 
-                            <div className="cfa-product-list">
-                              {filteredProducts.length === 0 ? (
+                            <div className="cfa-product-list" aria-live="polite">
+                              {productsBusy && (
                                 <div className="cfa-empty">
-                                  {data.products.length === 0
-                                    ? "Products are unavailable. Check read_products access and Shopify connectivity."
-                                    : "No matching products."}
+                                  Loading products from Shopify...
                                 </div>
-                              ) : (
-                                filteredProducts.map((product) => {
-                                  const id = legacyProductId(product.id);
-
-                                  return (
-                                    <div
-                                      className="cfa-product-item"
-                                      key={product.id}
-                                    >
-                                      <input
-                                        id={`cf-product-${id}`}
-                                        type="checkbox"
-                                        checked={form.productIds.includes(id)}
-                                        onChange={(event) =>
-                                          toggleProduct(id, event.target.checked)
-                                        }
-                                      />
-                                      <label htmlFor={`cf-product-${id}`}>
-                                        <span className="cfa-product-name">
-                                          {product.title}
-                                        </span>
-                                        <span className="cfa-product-handle">
-                                          /{product.handle}
-                                        </span>
-                                      </label>
-                                    </div>
-                                  );
-                                })
                               )}
+
+                              {!productsBusy && productError && (
+                                <div className="cfa-empty">
+                                  {productError}
+                                  <div style={{ marginTop: 10 }}>
+                                    <button
+                                      type="button"
+                                      className="cfa-button"
+                                      onClick={() => loadProductCatalog(activeProductQuery)}
+                                    >
+                                      Retry
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {!productsBusy && !productError && products.length === 0 && (
+                                <div className="cfa-empty">
+                                  No matching products. Try another search term.
+                                </div>
+                              )}
+
+                              {pickerProducts.map((product) => {
+                                const id = legacyProductId(product.id);
+
+                                return (
+                                  <div
+                                    className="cfa-product-item"
+                                    key={product.id}
+                                  >
+                                    <input
+                                      id={`cf-product-${id}`}
+                                      type="checkbox"
+                                      checked={form.productIds.includes(id)}
+                                      disabled={
+                                        !form.productIds.includes(id) &&
+                                        form.productIds.length >= MAX_SELECTED_PRODUCTS
+                                      }
+                                      onChange={(event) =>
+                                        toggleProduct(id, event.target.checked)
+                                      }
+                                    />
+                                    <label htmlFor={`cf-product-${id}`}>
+                                      <span className="cfa-product-name">
+                                        {product.title}
+                                      </span>
+                                      <span className="cfa-product-handle">
+                                        /{product.handle}
+                                      </span>
+                                    </label>
+                                  </div>
+                                );
+                              })}
                             </div>
+
+                            {hasMoreProducts && !productError && (
+                              <div style={{ padding: 8, textAlign: "center" }}>
+                                <button
+                                  type="button"
+                                  className="cfa-button"
+                                  onClick={loadMoreProducts}
+                                  disabled={productsBusy}
+                                >
+                                  {productsBusy ? "Loading..." : "Load more products"}
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           <span className="cfa-help">
-                            The selector currently loads up to 100 products.
-                            Collection selection is a later extension.
+                            Search is performed in Shopify. Results are loaded 50 at a time;
+                            load more to browse additional products. Selected product IDs
+                            remain saved when you change searches. A maximum of 500 products
+                            can be selected per rule.
                           </span>
                         </div>
                       )}
@@ -2433,7 +2603,7 @@ export default function AutomationsPage() {
                         <label className="cfa-label" htmlFor="cf-value">
                           {form.rewardType === "PERCENTAGE"
                             ? "Cashback percentage (%)"
-                            : `Credit amount (${data.currencyCode})`}
+                            : `Credit amount (${data.currencyCode ?? "store currency"})`}
                         </label>
                         <input
                           id="cf-value"
@@ -2463,7 +2633,7 @@ export default function AutomationsPage() {
 
                       <div className="cfa-field">
                         <label className="cfa-label" htmlFor="cf-cap">
-                          Maximum reward ({data.currencyCode})
+                          Maximum reward ({data.currencyCode ?? "store currency"})
                         </label>
                         <input
                           id="cf-cap"
