@@ -84,3 +84,16 @@ This change adds the durable queues and a protected HTTP worker endpoint; it doe
 - The embedded **Operations** page shows the most recent worker heartbeat. It reports `ONLINE`, `RUNNING`, `FAILED`, `STALE`, or `NOT_SEEN`; a heartbeat is stale after three minutes.
 - Heartbeat records contain no merchant payloads and are retained for 14 days.
 - This heartbeat proves the protected worker endpoint was invoked. It does not replace the hosting provider's cron execution logs or prove that every queued financial operation completed successfully; continue monitoring queue status and manual-review counts.
+
+
+## Customer credit email notifications
+
+- The merchant chooses one credit-issued email mode: Shopify native, CreditFlow branded, or disabled. Native and branded issue emails are mutually exclusive.
+- Shopify native mode passes the Store Credit mutation's `notify` flag; Shopify owns its template and delivery. CreditFlow branded mode sets Shopify `notify: false` and queues a Resend email after the credit transaction and CreditFlow records are persisted.
+- The merchant configures the custom email design in **Customer emails**. Template values are escaped before HTML insertion; merchant-authored raw HTML is not executed.
+- Expiry reminders are opt-in and can be set for 7, 3, and/or 1 day before expiry.
+- The scheduler only queues reminder candidates based on stored expiry metadata. Immediately before delivery, CreditFlow fetches the exact Shopify Store Credit credit transaction by its GraphQL ID and checks Shopify's `expiresAt` and `remainingAmount`.
+- A fully spent, expired, or no-longer-expiring transaction is skipped. A stable Resend `Idempotency-Key` is used for retries after uncertain network outcomes.
+- Email notifications share the durable queue, lease, retry, and operations monitoring. The Operations page exposes QUEUED, PROCESSING, SENT, SKIPPED, and FAILED counts, and delivery errors for intervention.
+- When customer or shop redaction is pending or failed, customer email jobs and expiry scans are held for the affected shop. Privacy work takes precedence over outbound notifications.
+- Resend credentials and the verified sender address are server-side secrets. Never expose them to browser code or write them to logs.
