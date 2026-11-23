@@ -78,3 +78,6 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Build production container
+        run: docker build --tag creditflow:ci .
