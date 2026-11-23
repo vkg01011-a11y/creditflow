@@ -59,7 +59,7 @@ Create a cron job from the same Docker image:
 - `CREDITFLOW_WORKER_SECRET`: exactly the same secret configured on the web service
 - `WORKER_BATCH_LIMIT`: start at `5`
 
-The runner sends one authenticated POST request, times out after 55 seconds, and prints structured queue counts. It never prints the bearer secret.
+The runner sends one authenticated POST request, times out after 55 seconds, and prints structured queue counts. It never prints the bearer secret. Each authenticated invocation is also recorded in the platform-level WorkerRun heartbeat table; the embedded Operations page reports ONLINE, RUNNING, FAILED, STALE, or NOT_SEEN. Heartbeats older than 14 days are purged.
 
 Do not treat a successful HTTP request as proof that all financial jobs were completed. Review the returned processed/retry/review/failed counts and the embedded Operations page. A `REVIEW_REQUIRED` financial operation is a safety stop and must be reconciled against Shopify's Store Credit transaction history.
 
@@ -85,7 +85,7 @@ Do not deploy the current `https://example.com` placeholders to a production app
 3. Deploy the web service with the release migration command.
 4. Confirm `GET /healthz` returns HTTP 200.
 5. Confirm `GET /readyz` returns HTTP 200 and both runtime configuration and database checks are `ok`.
-6. Create and enable the one-minute worker schedule.
+6. Create and enable the one-minute worker schedule, then confirm the Operations page reports the worker heartbeat as ONLINE.
 7. Confirm the cron execution history shows successful runs and inspect the Operations page for queue age and action-required records.
 8. Deploy Shopify webhook subscriptions only after the real app URL and OAuth callback are configured.
 9. Install the app on a dedicated development/staging Shopify store and complete the remaining release test matrix.
