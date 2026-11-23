@@ -357,8 +357,9 @@ export default function NotificationsPage() {
               </div>
 
               <div className="cfe-mode">
-                <label>
+                <label htmlFor="issued-email-mode-shopify">
                   <input
+                    id="issued-email-mode-shopify"
                     type="radio"
                     name="issuedEmailMode"
                     value="SHOPIFY_NATIVE"
@@ -367,18 +368,20 @@ export default function NotificationsPage() {
                   />
                   <span><strong>Shopify native email</strong><br /><span className="cfe-hint">Shopify sends its standard store-credit email. Customize its template in Shopify Admin → Settings → Notifications.</span></span>
                 </label>
-                <label>
+                <label htmlFor="issued-email-mode-creditflow">
                   <input
+                    id="issued-email-mode-creditflow"
                     type="radio"
                     name="issuedEmailMode"
                     value="CREDITFLOW_CUSTOM"
                     checked={settings.issuedEmailMode === "CREDITFLOW_CUSTOM"}
                     onChange={() => update("issuedEmailMode", "CREDITFLOW_CUSTOM")}
                   />
-                  <span><strong>CreditFlow branded email</strong><br /><span className="cfe-hint">CreditFlow sends the custom design shown in the preview. Shopify's native email is disabled for this grant to prevent duplicates.</span></span>
+                  <span><strong>CreditFlow branded email</strong><br /><span className="cfe-hint">CreditFlow sends the custom design shown in the preview. Shopify&apos;s native email is disabled for this grant to prevent duplicates.</span></span>
                 </label>
-                <label>
+                <label htmlFor="issued-email-mode-disabled">
                   <input
+                    id="issued-email-mode-disabled"
                     type="radio"
                     name="issuedEmailMode"
                     value="DISABLED"
@@ -422,7 +425,7 @@ export default function NotificationsPage() {
                 />
                 <strong style={{fontSize:13}}>Send store-credit expiry reminders</strong>
               </div>
-              <p>CreditFlow checks Shopify's actual remaining amount before sending. Reminders are not sent when the credit has already been fully spent.</p>
+              <p>CreditFlow checks Shopify&apos;s actual remaining amount before sending. Reminders are not sent when the credit has already been fully spent.</p>
               <div className="cfe-checks">
                 {days.map((day) => (
                   <label key={day}>
