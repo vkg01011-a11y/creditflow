@@ -54,7 +54,7 @@ function safeMessage(value: unknown) {
   if (!(value instanceof Error)) return "Email delivery failed.";
 
   return value.message
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+[.][A-Z]{2,}/gi, "[email]")
     .replace(/re_[A-Za-z0-9_-]{16,}/g, "[provider-key]")
     .slice(0, 1000);
 }
