@@ -4,6 +4,8 @@ This runbook describes a staged deployment. Do not point a live merchant store a
 
 ## 1. Managed services
 
+The repository includes a Render Blueprint at `render.yaml`. It is pinned to `feature/reliability-webhook-queue` and defines the web service, PostgreSQL database, and one-minute cron runner. Review the service names, region, and plan before creating the Blueprint. Creating it provisions paid resources.
+
 Create three managed resources:
 
 1. **Web service** — deploy the repository's Dockerfile and expose port 3000.
@@ -36,10 +38,12 @@ Set these values in the provider's secret environment manager:
 | `SHOPIFY_API_KEY` | Shopify app client ID |
 | `SHOPIFY_API_SECRET` | Shopify app secret |
 | `SHOPIFY_APP_URL` | Final public HTTPS app URL |
-| `SCOPES` | `read_orders,read_customers,read_products,write_store_credit_account_transactions` |
+| `SCOPES` | `read_orders,read_customers,read_products,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions` |
 | `DATABASE_URL` | Private production PostgreSQL connection string |
 | `SHADOW_DATABASE_URL` | Separate shadow database connection string for Prisma schema tooling |
 | `CREDITFLOW_WORKER_SECRET` | Unique cryptographically random secret, at least 32 characters |
+| `RESEND_API_KEY` | Resend transactional email API key |
+| `CREDITFLOW_EMAIL_FROM` | Sender display name and address on a verified Resend domain, e.g. `CreditFlow Rewards <rewards@your-domain.com>` |
 
 Never commit production values to Git, print them in build logs, or place them in browser-visible code.
 
@@ -78,7 +82,25 @@ npm run deploy
 
 Do not deploy the current `https://example.com` placeholders to a production app configuration.
 
-## 6. Release sequence
+## 6. Customer email delivery
+
+CreditFlow supports two mutually exclusive credit-issued email channels:
+
+- Shopify native notification: the Store Credit mutation uses Shopify's `notify: true` flag. Merchants edit this template in Shopify Admin → Settings → Notifications.
+- CreditFlow branded notification: the app uses `notify: false` for that grant and queues a designed transactional email through Resend. Merchants customize its logo, brand colour, sender display name, reply-to, subject, headline, body, CTA, and footer in `/app/notifications`.
+
+The branded channel requires:
+
+1. A Resend account and a sending domain verified by adding the DNS records Resend provides.
+2. `RESEND_API_KEY` configured as a secret on the web service.
+3. `CREDITFLOW_EMAIL_FROM` set to an address on the verified domain.
+4. Shopify scopes `read_store_credit_accounts` and `read_store_credit_account_transactions` approved by the merchant after app reauthorization if required.
+
+Expiry reminders are separately disabled by default. Merchants may select 7, 3, and/or 1 day before expiry. CreditFlow checks the exact Shopify credit transaction's `expiresAt` and `remainingAmount` immediately before sending. No reminder is sent if the credit has expired, has been fully spent, or Shopify no longer reports an expiry for that transaction.
+
+The worker processes notification jobs through the same durable queue and exposes the result in **Operations**. Resend requests use a stable idempotency key to protect against duplicate sends when the worker retries an uncertain network request.
+
+## 7. Release sequence
 
 1. Provision PostgreSQL and configure a tested automated backup policy.
 2. Configure all web-service environment variables and verify that secrets are not present in Git.
