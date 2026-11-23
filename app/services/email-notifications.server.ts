@@ -51,8 +51,12 @@ function asRecord(value: unknown): JsonRecord {
 }
 
 function safeMessage(value: unknown) {
-  if (value instanceof Error) return value.message.slice(0, 1000);
-  return "Email delivery failed.";
+  if (!(value instanceof Error)) return "Email delivery failed.";
+
+  return value.message
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, "[email]")
+    .replace(/re_[A-Za-z0-9_-]{16,}/g, "[provider-key]")
+    .slice(0, 1000);
 }
 
 function formatMoney(amount: string, currencyCode: string) {
