@@ -497,7 +497,8 @@ async function processNotificationJob(
     if (result.status === "SKIPPED") {
       await updateNotificationJob(job, workerId, {
         status: "SKIPPED",
-        provider: "shopify-resend",
+        provider: null,
+        providerMessageId: null,
         lastError: null,
       });
       counts.notificationsSkipped += 1;
