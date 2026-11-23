@@ -24,8 +24,10 @@ test("renders issued-credit subject, personalized headline and safe CTA", () => 
     },
   });
 
-  assert.equal(result.subject, "You earned ₹250.00 at North &amp; Co");
+  assert.equal(result.subject, "You earned ₹250.00 at North & Co");
   assert.match(result.html, /A reward for you, Ava/);
+  assert.match(result.text, /North & Co/);
+  assert.equal(result.subject.includes("&amp;"), false);
   assert.match(result.html, /https:\/\/north\.example\.com/);
   assert.match(result.html, /#123456/);
   assert.match(result.html, /Browse the collection/);
