@@ -147,12 +147,16 @@ async function claimPrivacyJobs(limit: number, workerId: string) {
   return db.$queryRawUnsafe<PrivacyJob[]>(sql, limit, workerId);
 }
 
-async function claimNotificationJobs(limit: number, workerId: string) {
+async function claimNotificationJobs(
+  limit: number,
+  workerId: string,
+  excludedShops: string[],
+) {
   const sql = [
     'WITH picked AS (',
     '  SELECT "id"',
     '  FROM "Notification"',
-    '  WHERE (',
+    '  WHERE NOT ("shop" = ANY($3::text[])) AND (',
     '    "status" = \'QUEUED\'::"NotificationStatus"',
     '    AND ("scheduledAt" IS NULL OR "scheduledAt" <= NOW())',
     '  ) OR (',
@@ -177,7 +181,7 @@ async function claimNotificationJobs(limit: number, workerId: string) {
     'RETURNING item."id", item."shop", item."customerGid", item."dedupeKey", item."type", item."templateKey", item."metadata", item."attemptCount"',
   ].join("\n");
 
-  return db.$queryRawUnsafe<NotificationJob[]>(sql, limit, workerId);
+  return db.$queryRawUnsafe<NotificationJob[]>(sql, limit, workerId, excludedShops);
 }
 
 async function updateWebhookJob(
@@ -636,7 +640,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const pendingShopRedactions = await db.privacyRequest.findMany({
       where: {
         type: "SHOP_REDACT",
-        status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING"] },
+        status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING", "FAILED", "REVIEW_REQUIRED"] },
       },
       select: { shop: true },
       distinct: ["shop"],
@@ -645,11 +649,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       pendingShopRedactions.map((item) => item.shop),
     );
 
+    // Defer all customer emails for a shop while a customer redaction is
+    // pending. This is intentionally conservative: privacy takes precedence
+    // over notification delivery, and redaction may delete claimed queue rows.
+    const pendingCustomerRedactions = await db.privacyRequest.findMany({
+      where: {
+        type: "CUSTOMERS_REDACT",
+        status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING", "FAILED", "REVIEW_REQUIRED"] },
+      },
+      select: { shop: true },
+      distinct: ["shop"],
+    });
+    const shopsWithCustomerRedactions = new Set(
+      pendingCustomerRedactions.map((item) => item.shop),
+    );
+    const shopsWithPrivacyWork = [
+      ...new Set([...shopsBeingRedacted, ...shopsWithCustomerRedactions]),
+    ];
+
     try {
       await queueExpiringCreditNotifications(
         db,
         new Date(),
-        [...shopsBeingRedacted],
+        shopsWithPrivacyWork,
       );
     } catch (scanError) {
       console.error("[CreditFlow] Expiry email scheduling failed", {
@@ -660,7 +682,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const [webhookJobs, privacyJobs, notificationJobs] = await Promise.all([
       claimWebhookJobs(limit, workerId),
       claimPrivacyJobs(limit, workerId),
-      claimNotificationJobs(limit, workerId),
+      claimNotificationJobs(limit, workerId, shopsWithPrivacyWork),
     ]);
 
     const counts: Counts = {
