@@ -66,6 +66,7 @@ type StoreCreditMutationResponse = {
     storeCreditAccountCredit?: {
       storeCreditAccountTransaction?: {
         id: string;
+        account?: { id: string } | null;
       } | null;
       userErrors?: GraphqlError[];
     } | null;
@@ -120,7 +121,7 @@ async function issueNativeStoreCredit(
     expiresAt?: string;
     notifyCustomer?: boolean;
   },
-): Promise<{ id: string }> {
+): Promise<{ id: string; accountId: string }> {
   // Passing the customer ID allows Shopify to create the currency-specific
   // Store Credit account when the customer does not already have one.
   const creditResponse = await admin.graphql(
@@ -132,6 +133,9 @@ async function issueNativeStoreCredit(
         storeCreditAccountCredit(id: $customerId, creditInput: $creditInput) {
           storeCreditAccountTransaction {
             id
+            account {
+              id
+            }
           }
           userErrors {
             message
@@ -156,19 +160,20 @@ async function issueNativeStoreCredit(
   const graphqlErrors = creditBody.errors ?? [];
   const userErrors = payload?.userErrors ?? [];
   const transactionId = payload?.storeCreditAccountTransaction?.id;
+  const accountId = payload?.storeCreditAccountTransaction?.account?.id;
 
-  if (graphqlErrors.length > 0 || userErrors.length > 0 || !transactionId) {
+  if (graphqlErrors.length > 0 || userErrors.length > 0 || !transactionId || !accountId) {
     const messages = [...graphqlErrors, ...userErrors]
       .map((item) => item.message)
       .filter((message): message is string => Boolean(message));
 
     throw createProcessingError(
-      messages.join("; ") || "Shopify did not return a store credit transaction.",
+      messages.join("; ") || "Shopify did not return a store credit transaction and account reference.",
       graphqlErrors.length === 0 && userErrors.length > 0,
     );
   }
 
-  return { id: transactionId };
+  return { id: transactionId, accountId };
 }
 
 type PaymentStatus = "PREPAID" | "COD" | "UNKNOWN";
@@ -413,6 +418,16 @@ export async function processFulfilledOrder({
       throw new Error(`Automation rule ${rule.id} has invalid expiryDays.`);
     }
 
+    const emailSettings = await db.emailNotificationSettings.findUnique({
+      where: { shop },
+      select: { issuedEmailMode: true },
+    });
+    const issuedEmailMode = emailSettings?.issuedEmailMode ?? "SHOPIFY_NATIVE";
+    const expiresAt = rule.expiryDays
+      ? new Date(Date.now() + rule.expiryDays * 86400000).toISOString()
+      : undefined;
+    const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
+
     const eventKey = `fulfilled:${shop}:${orderGid}:${rule.id}`;
     let grant: CreditGrant;
 
@@ -430,6 +445,7 @@ export async function processFulfilledOrder({
             rule.rewardBase === "ELIGIBLE_ITEMS"
               ? eligibleSubtotal
               : orderSubtotal,
+          expiresAt: expiresAtDate,
           status: "PROCESSING",
         },
       });
@@ -472,32 +488,35 @@ export async function processFulfilledOrder({
 
     let shopifyTransactionGid: string | null = null;
 
-    try {
-      const expiresAt = rule.expiryDays
-        ? new Date(Date.now() + rule.expiryDays * 86400000).toISOString()
-        : undefined;
+    let shopifyAccountGid: string | null = null;
 
+    try {
       const transaction = await issueNativeStoreCredit(admin, {
         customerGid,
         amount: calculation.amount,
         currencyCode,
         expiresAt,
-        notifyCustomer: rule.notifyCustomer,
+        notifyCustomer:
+          rule.notifyCustomer && issuedEmailMode === "SHOPIFY_NATIVE",
       });
 
-      // Retain the Shopify transaction ID in case the following DB transaction fails.
+      // Retain external transaction references in case the following DB transaction fails.
       shopifyTransactionGid = transaction.id;
+      shopifyAccountGid = transaction.accountId;
 
-      await db.$transaction([
-        db.creditGrant.update({
+      await db.$transaction(async (tx) => {
+        await tx.creditGrant.update({
           where: { id: grant.id },
           data: {
             status: "ISSUED",
             shopifyTransactionGid: transaction.id,
+            shopifyAccountGid: transaction.accountId,
+            expiresAt: expiresAtDate,
             issuedAt: new Date(),
           },
-        }),
-        db.creditLedgerEntry.create({
+        });
+
+        await tx.creditLedgerEntry.create({
           data: {
             shop,
             eventKey,
@@ -509,10 +528,33 @@ export async function processFulfilledOrder({
             currencyCode,
             reason: `Cashback for order ${order.name || order.id || orderGid}`,
             shopifyTransactionGid: transaction.id,
-            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            expiresAt: expiresAtDate,
           },
-        }),
-      ]);
+        });
+
+        if (rule.notifyCustomer && issuedEmailMode === "CREDITFLOW_CUSTOM") {
+          await tx.notification.create({
+            data: {
+              shop,
+              customerGid,
+              dedupeKey: `credit-issued:${shop}:${grant.id}`,
+              type: "CREDIT_ISSUED",
+              status: "QUEUED",
+              templateKey: "CREDIT_ISSUED",
+              metadata: {
+                creditGrantId: grant.id,
+                amount: calculation.amount,
+                currencyCode,
+                expiresAt: expiresAtDate?.toISOString() ?? null,
+                shopifyAccountGid: transaction.accountId,
+                shopifyTransactionGid: transaction.id,
+                orderName: order.name || order.id || orderGid,
+              },
+              scheduledAt: new Date(),
+            },
+          });
+        }
+      });
 
       return {
         status: "ISSUED",
@@ -530,6 +572,10 @@ export async function processFulfilledOrder({
             ...(shopifyTransactionGid
               ? { shopifyTransactionGid }
               : {}),
+            ...(shopifyAccountGid
+              ? { shopifyAccountGid }
+              : {}),
+            expiresAt: expiresAtDate,
             errorMessage: errorMessage(error),
           },
         });
