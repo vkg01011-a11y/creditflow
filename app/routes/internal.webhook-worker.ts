@@ -152,11 +152,14 @@ async function claimNotificationJobs(
   workerId: string,
   excludedShops: string[],
 ) {
+  const exclusion = excludedShops.length > 0
+    ? `NOT ("shop" IN (${excludedShops.map((_, index) => `${index + 3}`).join(", ")})) AND `
+    : "";
   const sql = [
     'WITH picked AS (',
     '  SELECT "id"',
     '  FROM "Notification"',
-    '  WHERE NOT ("shop" = ANY($3::text[])) AND ((',
+    `  WHERE ${exclusion}((',
     '    "status" = \'QUEUED\'::"NotificationStatus"',
     '    AND ("scheduledAt" IS NULL OR "scheduledAt" <= NOW())',
     '  ) OR (',
@@ -181,7 +184,7 @@ async function claimNotificationJobs(
     'RETURNING item."id", item."shop", item."customerGid", item."dedupeKey", item."type", item."templateKey", item."metadata", item."attemptCount"',
   ].join("\n");
 
-  return db.$queryRawUnsafe<NotificationJob[]>(sql, limit, workerId, excludedShops);
+  return db.$queryRawUnsafe<NotificationJob[]>(sql, limit, workerId, ...excludedShops);
 }
 
 async function updateWebhookJob(
