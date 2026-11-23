@@ -61,6 +61,13 @@ Required environment variables:
 | `SHADOW_DATABASE_URL` | Prisma shadow database connection |
 | `CREDITFLOW_WORKER_SECRET` | Random secret of at least 32 characters for the internal worker |
 
+Optional customer email delivery variables:
+
+| Variable | Purpose |
+|---|---|
+| `RESEND_API_KEY` | Resend transactional email API key |
+| `CREDITFLOW_EMAIL_FROM` | Sender address on a domain verified with Resend |
+
 Optional worker variables:
 
 | Variable | Purpose |
@@ -125,6 +132,33 @@ Schedule that command every minute in the hosting provider. The runner sends the
 
 The embedded **Operations** page shows queue state, worker-secret configuration, and the latest authenticated worker heartbeat. A heartbeat becomes stale after three minutes without a new run; heartbeat history is retained for 14 days. Also monitor scheduler execution history in the hosting provider.
 
+## Customer email notifications
+
+Open **Customer emails** in the embedded app at `/app/notifications`.
+
+Credit-issued notifications have three mutually exclusive modes:
+
+- **Shopify native email** (default): CreditFlow passes Shopify's `notify: true` flag when issuing the Store Credit. Shopify sends its standard store-credit notification. Edit that message in Shopify Admin → Settings → Notifications.
+- **CreditFlow branded email**: Shopify's native email is disabled for that credit grant and CreditFlow queues one custom transactional email through Resend. Merchants can configure sender display name, reply-to, logo, accent colour, subject, headline, message, CTA label, and footer.
+- **Disabled**: the credit is still issued, but no issue email is sent.
+
+Expiry reminders are a separate opt-in. Merchants choose reminders 7, 3, and/or 1 day before the expiry date. CreditFlow fetches the exact Shopify credit transaction immediately before sending and suppresses the reminder if the transaction has no expiry or its remaining amount is zero. The Operations page tracks queued, sent, skipped, and failed email notifications.
+
+Before enabling CreditFlow-branded delivery or expiry reminders:
+
+1. Create a Resend account and verify a sending domain by adding the DNS records Resend provides.
+2. Set `RESEND_API_KEY` in the private hosting secret manager.
+3. Set `CREDITFLOW_EMAIL_FROM` to a sender address on that verified domain, for example `CreditFlow Rewards <rewards@your-domain.com>`.
+4. Confirm the app has `read_store_credit_accounts` and `read_store_credit_account_transactions` scopes. Stores may need to reauthorize after the scope change.
+5. Save the email design in **Customer emails** and enable the required mode.
+
+Template tokens:
+
+- Issued credit: `{{ shop_name }}`, `{{ customer_first_name }}`, `{{ credit_amount }}`.
+- Expiry reminder: `{{ shop_name }}`, `{{ customer_first_name }}`, `{{ remaining_amount }}`, `{{ expiry_date }}`.
+
+These are transactional store-credit notifications, not marketing subscriptions. CreditFlow does not send both Shopify's native issue email and its own branded issue email for the same grant.
+
 ## Container deployment
 
 Build the production image:
@@ -168,5 +202,7 @@ This repository is not yet approved for live merchants or the Shopify App Store.
 - Complete install, reauthorization, uninstall/reinstall, privacy, and worker recovery testing.
 - Publish a privacy policy, terms, support contact, support documentation, and App Store listing assets.
 - Review Shopify policy compliance and data handling with appropriate legal advice.
+
+The Render staging Blueprint is in [render.yaml](./render.yaml). Review the resources, region, service names, and branch before creating the Blueprint in Render. It is configured for the feature branch; creating the Blueprint provisions billable resources.
 
 See [PRODUCT-READINESS.md](./PRODUCT-READINESS.md), [RELIABILITY-OPERATIONS.md](./RELIABILITY-OPERATIONS.md), and [PREPRODUCTION-RUNBOOK.md](./PREPRODUCTION-RUNBOOK.md) for the release checklist and operating procedures.
