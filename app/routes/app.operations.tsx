@@ -182,7 +182,7 @@ function shortId(value: string) {
 
 function statusClass(status: string) {
   if (["FAILED", "REVIEW_REQUIRED", "STALE", "NOT_SEEN"].includes(status)) return "cfo-status cfo-status--warning";
-  if (["PROCESSED", "COMPLETED", "ONLINE"].includes(status)) return "cfo-status cfo-status--success";
+  if (["PROCESSED", "COMPLETED", "ONLINE", "SENT", "SKIPPED"].includes(status)) return "cfo-status cfo-status--success";
   return "cfo-status";
 }
 
