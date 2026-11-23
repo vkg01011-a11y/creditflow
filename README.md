@@ -123,7 +123,7 @@ npm run worker:once
 
 Schedule that command every minute in the hosting provider. The runner sends the protected POST request, enforces a 55-second timeout, and emits structured counts without logging the secret.
 
-The embedded **Operations** page shows queue state and whether the worker secret is configured. Scheduler connectivity must still be monitored in the external scheduler.
+The embedded **Operations** page shows queue state, worker-secret configuration, and the latest authenticated worker heartbeat. A heartbeat becomes stale after three minutes without a new run; heartbeat history is retained for 14 days. Also monitor scheduler execution history in the hosting provider.
 
 ## Container deployment
 
