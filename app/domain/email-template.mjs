@@ -29,7 +29,14 @@ function safeHttpsUrl(value) {
   }
 }
 
-function interpolate(template, values) {
+function interpolateText(template, values) {
+  return String(template ?? "").replace(
+    /\{\{\s*([a-z_]+)\s*\}\}/gi,
+    (_match, key) => String(values[key] ?? ""),
+  );
+}
+
+function interpolateHtml(template, values) {
   return String(template ?? "").replace(
     /\{\{\s*([a-z_]+)\s*\}\}/gi,
     (_match, key) => escapeHtml(values[key] ?? ""),
@@ -65,9 +72,13 @@ export function renderCreditEmail({ type, settings = {}, data = {} }) {
     expiry_date: data.expiryDate ?? "",
   };
 
-  const subject = interpolate(subjectTemplate, values).slice(0, 180);
-  const headline = interpolate(headlineTemplate, values);
-  const message = interpolate(messageTemplate, values);
+  const subject = interpolateText(subjectTemplate, values)
+    .replace(/[\\r\\n]+/g, " ")
+    .slice(0, 180);
+  const headlineText = interpolateText(headlineTemplate, values);
+  const messageText = interpolateText(messageTemplate, values);
+  const headline = interpolateHtml(headlineTemplate, values);
+  const message = interpolateHtml(messageTemplate, values);
   const color = normalizeColor(settings.accentColor);
   const shopName = escapeHtml(data.shopName ?? "Our store");
   const logoUrl = safeHttpsUrl(settings.logoUrl);
@@ -81,10 +92,9 @@ export function renderCreditEmail({ type, settings = {}, data = {} }) {
   const firstName = data.customerFirstName
     ? "Hi " + escapeHtml(data.customerFirstName) + ","
     : "Hello,";
-  const footer = escapeHtml(
-    settings.footerText ||
-    ["You received this email because", data.shopName ?? "this store", "updated your store credit account."].join(" "),
-  );
+  const footerText = settings.footerText ||
+    ["You received this email because", data.shopName ?? "this store", "updated your store credit account."].join(" ");
+  const footer = escapeHtml(footerText);
 
   const html = [
     '<!doctype html>',
@@ -109,14 +119,14 @@ export function renderCreditEmail({ type, settings = {}, data = {} }) {
   const text = [
     data.shopName ?? "Our store",
     "",
-    headline,
+    headlineText,
     "",
     data.customerFirstName ? "Hi " + data.customerFirstName + "," : "Hello,",
-    message,
+    messageText,
     "",
     ctaUrl ? ctaLabel + ": " + ctaUrl : "",
     "",
-    settings.footerText || footer,
+    footerText,
   ].filter(Boolean).join("\n");
 
   return { subject, html, text };
