@@ -231,10 +231,12 @@ async function sendWithResend({
 export async function queueExpiringCreditNotifications(
   db: PrismaClient,
   now = new Date(),
+  excludedShops: string[] = [],
 ) {
   const scanThreshold = new Date(now.getTime() - 23 * 60 * 60 * 1000);
   const settingsRows = await db.emailNotificationSettings.findMany({
     where: {
+      ...(excludedShops.length > 0 ? { shop: { notIn: excludedShops } } : {}),
       expiryReminderEnabled: true,
       OR: [
         { lastExpiryScanAt: null },
