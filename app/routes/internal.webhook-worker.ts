@@ -152,8 +152,11 @@ async function claimNotificationJobs(
   workerId: string,
   excludedShops: string[],
 ) {
+  const placeholders = excludedShops
+    .map((_, index) => "$" + String(index + 3))
+    .join(", ");
   const exclusion = excludedShops.length > 0
-    ? `NOT ("shop" IN (${excludedShops.map((_, index) => `${index + 3}`).join(", ")})) AND `
+    ? 'NOT ("shop" IN (' + placeholders + ')) AND '
     : "";
   const sql = [
     'WITH picked AS (',
