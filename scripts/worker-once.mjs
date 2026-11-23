@@ -63,6 +63,10 @@ try {
     privacyProcessed: body?.privacyProcessed ?? null,
     privacyRetryPending: body?.privacyRetryPending ?? null,
     privacyFailed: body?.privacyFailed ?? null,
+    notificationsProcessed: body?.notificationsProcessed ?? null,
+    notificationsSkipped: body?.notificationsSkipped ?? null,
+    notificationsRetryPending: body?.notificationsRetryPending ?? null,
+    notificationsFailed: body?.notificationsFailed ?? null,
   }));
 
   if (!response.ok || body?.success !== true) {
