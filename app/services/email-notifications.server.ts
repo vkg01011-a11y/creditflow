@@ -1,8 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
+import type { authenticate } from "../shopify.server";
 import { renderCreditEmail } from "../domain/email-template.mjs";
 import { getWebhookRetryDelayMs, MAX_WEBHOOK_ATTEMPTS } from "../domain/webhook-retry.mjs";
 
 type JsonRecord = Record<string, unknown>;
+
+type ShopifyAdmin = NonNullable<
+  Awaited<ReturnType<typeof authenticate.webhook>>["admin"]
+>;
 
 type NotificationLike = {
   id: string;
@@ -124,7 +129,7 @@ function shopUrl(context: ShopifyNotificationContext, shop: string) {
 }
 
 async function getShopifyNotificationContext(
-  admin: { graphql: (query: string, options?: unknown) => Promise<Response> },
+  admin: ShopifyAdmin,
   customerGid: string,
   accountGid: string,
   transactionGid: string,
@@ -364,7 +369,7 @@ export async function processCreditEmailNotification({
   notification,
 }: {
   db: PrismaClient;
-  admin: { graphql: (query: string, options?: unknown) => Promise<Response> };
+  admin: ShopifyAdmin;
   notification: NotificationLike;
 }): Promise<{ status: "SENT" | "SKIPPED"; providerMessageId?: string }> {
   const settings = await db.emailNotificationSettings.findUnique({
