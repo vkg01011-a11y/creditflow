@@ -123,10 +123,11 @@ async function getShopifyNotificationContext(
   admin: { graphql: (query: string, options?: unknown) => Promise<Response> },
   customerGid: string,
   accountGid: string,
+  transactionGid: string,
 ): Promise<ShopifyNotificationContext> {
   const response = await admin.graphql(
     `#graphql
-      query CreditFlowEmailContext($customerId: ID!, $accountId: ID!) {
+      query CreditFlowEmailContext($customerId: ID!, $accountId: ID!, $transactionQuery: String!) {
         customer(id: $customerId) {
           email
           firstName
@@ -137,7 +138,7 @@ async function getShopifyNotificationContext(
             amount
             currencyCode
           }
-          transactions(first: 250, query: "type:credit") {
+          transactions(first: 1, query: $transactionQuery) {
             edges {
               node {
                 ... on StoreCreditAccountCreditTransaction {
@@ -162,7 +163,13 @@ async function getShopifyNotificationContext(
         }
       }
     `,
-    { variables: { customerId: customerGid, accountId: accountGid } },
+    {
+      variables: {
+        customerId: customerGid,
+        accountId: accountGid,
+        transactionQuery: "type:credit AND id:" + transactionGid.split("/").pop(),
+      },
+    },
   );
 
   const body = (await response.json()) as ShopifyNotificationContext;
@@ -375,10 +382,16 @@ export async function processCreditEmailNotification({
     throw new Error("The notification is missing its Shopify credit references.");
   }
 
+  const transactionNumericId = transactionGid.split("/").pop() ?? "";
+  if (!/^\d+$/.test(transactionNumericId)) {
+    throw new Error("The Shopify credit transaction reference is invalid.");
+  }
+
   const context = await getShopifyNotificationContext(
     admin,
     notification.customerGid,
     accountGid,
+    transactionGid,
   );
 
   const customer = context.data?.customer;
@@ -388,9 +401,7 @@ export async function processCreditEmailNotification({
     return { status: "SKIPPED" };
   }
 
-  const creditTransaction = account.transactions?.edges
-    ?.map((edge) => edge.node)
-    .find((node) => node?.id === transactionGid);
+  const creditTransaction = account.transactions?.edges?.[0]?.node;
 
   if (!creditTransaction) {
     throw new Error("The Shopify credit transaction could not be found for email verification.");
