@@ -5,12 +5,13 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { getWorkerHeartbeatState } from "../domain/worker-health.mjs";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  const [webhookGroups, privacyGroups, webhookRows, privacyRows] =
+  const [webhookGroups, privacyGroups, webhookRows, privacyRows, workerRuns] =
     await Promise.all([
       db.webhookEvent.groupBy({
         by: ["topic", "status"],
@@ -58,6 +59,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           nextAttemptAt: true,
         },
       }),
+      db.workerRun.findMany({
+        orderBy: { startedAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+        },
+      }),
     ]);
 
   const actionRequiredWebhooks = webhookGroups
@@ -66,6 +77,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const actionRequiredPrivacy = privacyGroups
     .filter((item) => item.status === "FAILED" || item.status === "REVIEW_REQUIRED")
     .reduce((sum, item) => sum + item._count._all, 0);
+
+  const latestWorkerRun = workerRuns[0] ?? null;
+  const workerHeartbeatState = getWorkerHeartbeatState(latestWorkerRun);
 
   return {
     webhookGroups: webhookGroups.map((item) => ({
@@ -94,6 +108,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       webhookActionRequired: actionRequiredWebhooks,
       privacyActionRequired: actionRequiredPrivacy,
     },
+    workerHeartbeatState,
+    workerLastSeenAt: latestWorkerRun
+      ? (latestWorkerRun.completedAt ?? latestWorkerRun.startedAt).toISOString()
+      : null,
+    workerRuns: workerRuns.map((item) => ({
+      id: item.id,
+      status: item.status,
+      startedAt: item.startedAt.toISOString(),
+      completedAt: item.completedAt?.toISOString() ?? null,
+    })),
     workerSecretConfigured:
       Boolean(process.env.CREDITFLOW_WORKER_SECRET) &&
       (process.env.CREDITFLOW_WORKER_SECRET?.length ?? 0) >= 32,
@@ -116,8 +140,8 @@ function shortId(value: string) {
 }
 
 function statusClass(status: string) {
-  if (status === "FAILED" || status === "REVIEW_REQUIRED") return "cfo-status cfo-status--warning";
-  if (status === "PROCESSED" || status === "COMPLETED") return "cfo-status cfo-status--success";
+  if (["FAILED", "REVIEW_REQUIRED", "STALE", "NOT_SEEN"].includes(status)) return "cfo-status cfo-status--warning";
+  if (["PROCESSED", "COMPLETED", "ONLINE"].includes(status)) return "cfo-status cfo-status--success";
   return "cfo-status";
 }
 
@@ -160,9 +184,46 @@ export default function OperationsPage() {
             {data.workerSecretConfigured ? "Configured" : "Missing or too short"}
           </span>
           <div className="cfo-muted">
-            Scheduler connectivity is not observable from the app. Confirm that
-            your external scheduler posts to /internal/webhook-worker every minute.
+            The secret is checked server-side and is never displayed here.
           </div>
+        </section>
+
+        <section className="cfo-config">
+          <strong>Worker heartbeat:</strong>{" "}
+          <span className={statusClass(data.workerHeartbeatState)}>
+            {humanize(data.workerHeartbeatState)}
+          </span>
+          <div className="cfo-muted">
+            {data.workerLastSeenAt
+              ? `Last authenticated worker activity: ${formatDate(data.workerLastSeenAt)}`
+              : "No authenticated worker invocation has been recorded yet."}
+            {" "}The heartbeat becomes stale after three minutes without a new run.
+          </div>
+        </section>
+
+        <section className="cfo-panel">
+          <div className="cfo-panel-head">
+            <div className="cfo-panel-title">Recent worker invocations</div>
+            <div className="cfo-panel-sub">Platform-level scheduler heartbeat; no merchant payloads are shown</div>
+          </div>
+          {data.workerRuns.length === 0 ? (
+            <div className="cfo-empty">No worker runs recorded yet.</div>
+          ) : (
+            <div className="cfo-scroll">
+              <table className="cfo-table">
+                <thead><tr><th>Started</th><th>Completed</th><th>Result</th></tr></thead>
+                <tbody>
+                  {data.workerRuns.map((item) => (
+                    <tr key={item.id}>
+                      <td>{formatDate(item.startedAt)}</td>
+                      <td>{item.completedAt ? formatDate(item.completedAt) : "Still running"}</td>
+                      <td><span className={statusClass(item.status)}>{humanize(item.status)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="cfo-panel">
