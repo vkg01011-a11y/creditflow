@@ -75,3 +75,12 @@ This change adds the durable queues and a protected HTTP worker endpoint; it doe
 - Review records under **Refund reversals** in the embedded app. Inspect Shopify's customer store-credit transaction history before any manual adjustment.
 - Existing grants created before the reward-basis migration have a null basis and require manual review for refunds.
 - New automation rules are created paused by default; merchants must review and activate them deliberately.
+
+
+## Worker invocation heartbeat
+
+- Every authenticated `POST /internal/webhook-worker` invocation creates a platform-level `WorkerRun` record.
+- Successful worker invocations are marked `COMPLETED`; an unhandled invocation error is marked `FAILED` where the database is available.
+- The embedded **Operations** page shows the most recent worker heartbeat. It reports `ONLINE`, `RUNNING`, `FAILED`, `STALE`, or `NOT_SEEN`; a heartbeat is stale after three minutes.
+- Heartbeat records contain no merchant payloads and are retained for 14 days.
+- This heartbeat proves the protected worker endpoint was invoked. It does not replace the hosting provider's cron execution logs or prove that every queued financial operation completed successfully; continue monitoring queue status and manual-review counts.
