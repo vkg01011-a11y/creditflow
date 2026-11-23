@@ -27,6 +27,12 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Persistent worker heartbeat records, stale detection, and Operations visibility.
 - [x] Docker build definition and secret-excluding Docker build context.
 - [x] Deployment instructions for release migrations, web process, and scheduled worker.
+- [x] Render Blueprint for a feature-branch staging web service, private Postgres, and one-minute cron worker.
+- [x] Merchant-facing Customer emails settings with live issued/expiry email preview, logo, colour, sender, reply-to, subjects, body, and CTA customization.
+- [x] Mutually exclusive Shopify-native or CreditFlow-branded credit-issued email modes.
+- [x] Resend delivery queue with retry and idempotency protection.
+- [x] Opt-in 7/3/1-day credit-expiry reminders, checked against Shopify's exact remaining credit transaction amount before delivery.
+- [x] Operations visibility for customer email queue states and failures.
 
 ## Verified development-store flows
 
@@ -43,8 +49,9 @@ These checks were performed against the connected development store and local Po
 
 ## Automated validation status
 
-- [x] Baseline CI previously passed Prisma migration deployment, 35 tests, TypeScript, ESLint, and production build at the earlier reliability commit.
-- [ ] Run CI for the current production-operations upgrade, including readiness tests and Docker image build.
+- [x] Previous production-operations baseline passed clean PostgreSQL migration deployment, tests, TypeScript, ESLint, production build, and Docker image build.
+- [ ] Validate the customer-email schema/migration and email template tests on the current branch head.
+- [ ] Confirm TypeScript, ESLint, production build, Render Blueprint YAML validation, and Docker build for the current branch head.
 - [ ] Apply any CI-required fixes and confirm the final branch head is green.
 
 ## Remaining application reliability tests
@@ -57,15 +64,28 @@ These checks were performed against the connected development store and local Po
 - [ ] Verify shop redaction removes shop-owned records and sessions.
 - [ ] Test install, reauthorization/scope changes, uninstall/reinstall, offline token expiry, and app removal.
 
+## Customer email release gates
+
+- [x] Implement Shopify-native versus CreditFlow-branded issue email selection without sending both for one grant.
+- [x] Implement merchant email design controls and live preview.
+- [x] Implement opt-in expiry reminders with Shopify remainingAmount verification and idempotent queued delivery.
+- [ ] Configure Resend API key and a verified sender domain in staging.
+- [ ] Reauthorize the staging app with Store Credit account/transaction read scopes.
+- [ ] Send and review test credit-issued and expiry emails in a real inbox across desktop/mobile clients.
+- [ ] Verify suppression after the credit has been spent or expiry has been removed.
+- [ ] Verify provider rejection, network timeout, retry, and duplicate delivery behavior.
+
 ## Pre-production infrastructure gates
 
+- [x] Add a Render Blueprint pinned to the feature branch.
 - [x] Add a container build definition.
 - [x] Add a safe environment template.
 - [x] Add process liveness and runtime/database readiness probes.
 - [x] Add a one-shot scheduled worker command.
 - [ ] Choose the managed hosting project and configure the real HTTPS app URL.
 - [ ] Provision production PostgreSQL with private connectivity, automated backups, and a tested restore.
-- [ ] Configure production Shopify API credentials, scopes, and a 32+ character worker secret.
+- [ ] Configure production Shopify API credentials, required Store Credit read/write scopes, and a 32+ character worker secret.
+- [ ] Configure Resend API key and verified sender domain if branded email mode is enabled.
 - [ ] Configure a one-minute scheduled worker using `npm run worker:once`.
 - [ ] Verify `/healthz` and `/readyz` after deployment.
 - [ ] Configure centralized logs, error monitoring, uptime checks, and alerts for queue age, failures, and review-required financial operations.
