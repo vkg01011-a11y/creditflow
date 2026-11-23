@@ -369,7 +369,10 @@ export async function processCreditEmailNotification({
   const metadata = asRecord(notification.metadata);
   const isIssued = notification.type === "CREDIT_ISSUED";
 
-  if (isIssued && settings?.issuedEmailMode !== "CREDITFLOW_CUSTOM") {
+  // The issue-email channel is snapshotted when the grant is created:
+  // changing merchant settings later must not suppress a queued message after
+  // Shopify's native email was disabled for that particular grant.
+  if (isIssued && metadata.issuedEmailMode !== "CREDITFLOW_CUSTOM") {
     return { status: "SKIPPED" };
   }
   if (!isIssued && !settings?.expiryReminderEnabled) {
