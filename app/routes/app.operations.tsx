@@ -11,7 +11,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  const [webhookGroups, privacyGroups, webhookRows, privacyRows, workerRuns] =
+  const [webhookGroups, privacyGroups, webhookRows, privacyRows, workerRuns, notificationGroups, notificationRows] =
     await Promise.all([
       db.webhookEvent.groupBy({
         by: ["topic", "status"],
@@ -69,6 +69,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           completedAt: true,
         },
       }),
+      db.notification.groupBy({
+        by: ["type", "status"],
+        where: { shop },
+        _count: { _all: true },
+      }),
+      db.notification.findMany({
+        where: {
+          shop,
+          status: { in: ["QUEUED", "PROCESSING", "FAILED"] },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: {
+          id: true,
+          type: true,
+          status: true,
+          attemptCount: true,
+          lastError: true,
+          createdAt: true,
+          scheduledAt: true,
+          sentAt: true,
+          providerMessageId: true,
+        },
+      }),
     ]);
 
   const actionRequiredWebhooks = webhookGroups
@@ -77,6 +101,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const actionRequiredPrivacy = privacyGroups
     .filter((item) => item.status === "FAILED" || item.status === "REVIEW_REQUIRED")
     .reduce((sum, item) => sum + item._count._all, 0);
+  const actionRequiredNotifications = notificationGroups
+    .filter((item) => item.status === "FAILED")
+    .reduce((sum, item) => sum + item._count._all, 0);
+
 
   const latestWorkerRun = workerRuns[0] ?? null;
   const workerHeartbeatState = getWorkerHeartbeatState(latestWorkerRun);
@@ -92,6 +120,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       status: item.status,
       count: item._count._all,
     })),
+    notificationGroups: notificationGroups.map((item) => ({
+      type: item.type,
+      status: item.status,
+      count: item._count._all,
+    })),
+    notificationRows: notificationRows.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+      scheduledAt: item.scheduledAt?.toISOString() ?? null,
+      sentAt: item.sentAt?.toISOString() ?? null,
+    })),
     webhookRows: webhookRows.map((item) => ({
       ...item,
       receivedAt: item.receivedAt.toISOString(),
@@ -105,8 +144,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     totals: {
       webhookTotal: webhookGroups.reduce((sum, item) => sum + item._count._all, 0),
       privacyTotal: privacyGroups.reduce((sum, item) => sum + item._count._all, 0),
+      notificationTotal: notificationGroups.reduce((sum, item) => sum + item._count._all, 0),
       webhookActionRequired: actionRequiredWebhooks,
       privacyActionRequired: actionRequiredPrivacy,
+      notificationActionRequired: actionRequiredNotifications,
     },
     workerHeartbeatState,
     workerLastSeenAt: latestWorkerRun
@@ -176,6 +217,14 @@ export default function OperationsPage() {
             <div className="cfo-label">Privacy action required</div>
             <div className="cfo-value">{data.totals.privacyActionRequired}</div>
           </article>
+          <article className="cfo-card">
+            <div className="cfo-label">Customer emails</div>
+            <div className="cfo-value">{data.totals.notificationTotal}</div>
+          </article>
+          <article className="cfo-card">
+            <div className="cfo-label">Email delivery failed</div>
+            <div className="cfo-value">{data.totals.notificationActionRequired}</div>
+          </article>
         </section>
 
         <section className="cfo-config">
@@ -218,6 +267,49 @@ export default function OperationsPage() {
                       <td>{formatDate(item.startedAt)}</td>
                       <td>{item.completedAt ? formatDate(item.completedAt) : "Still running"}</td>
                       <td><span className={statusClass(item.status)}>{humanize(item.status)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="cfo-panel">
+          <div className="cfo-panel-head">
+            <div className="cfo-panel-title">Customer email queue</div>
+            <div className="cfo-panel-sub">Transactional credit-issued and expiry-reminder messages</div>
+          </div>
+          {data.notificationGroups.length === 0 ? (
+            <div className="cfo-empty">No customer email notifications recorded yet.</div>
+          ) : (
+            <div className="cfo-pills">
+              {data.notificationGroups.map((item) => (
+                <div className="cfo-pill" key={item.type + item.status}>
+                  {humanize(item.type)} · {humanize(item.status)}
+                  <strong>{item.count}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.notificationRows.length === 0 ? (
+            <div className="cfo-empty">No queued or failed customer emails.</div>
+          ) : (
+            <div className="cfo-scroll">
+              <table className="cfo-table">
+                <thead><tr><th>Type</th><th>Status</th><th>Attempts</th><th>Created</th><th>Next attempt / Error</th></tr></thead>
+                <tbody>
+                  {data.notificationRows.map((item) => (
+                    <tr key={item.id}>
+                      <td>{humanize(item.type)}</td>
+                      <td><span className={statusClass(item.status)}>{humanize(item.status)}</span></td>
+                      <td>{item.attemptCount}</td>
+                      <td>{formatDate(item.createdAt)}</td>
+                      <td>
+                        {item.scheduledAt ? <div>{formatDate(item.scheduledAt)}</div> : null}
+                        {item.lastError ? <div className="cfo-error">{item.lastError}</div> : null}
+                        {!item.scheduledAt && !item.lastError ? "—" : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
