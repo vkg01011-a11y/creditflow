@@ -375,6 +375,15 @@ export async function processCreditEmailNotification({
   if (!isIssued && !settings?.expiryReminderEnabled) {
     return { status: "SKIPPED" };
   }
+  if (!isIssued) {
+    const configuredDays = Array.isArray(settings?.expiryReminderDays)
+      ? settings.expiryReminderDays.map(Number)
+      : [];
+    const queuedReminderDay = Number(metadata.reminderDays);
+    if (!configuredDays.includes(queuedReminderDay)) {
+      return { status: "SKIPPED" };
+    }
+  }
 
   const accountGid = String(metadata.shopifyAccountGid ?? "");
   const transactionGid = String(metadata.shopifyTransactionGid ?? "");
@@ -412,7 +421,9 @@ export async function processCreditEmailNotification({
     account.balance?.currencyCode ||
     String(metadata.currencyCode || "");
   const remainingAmount = creditTransaction.remainingAmount?.amount ?? "0";
-  const expiresAt = creditTransaction.expiresAt ?? String(metadata.expiresAt ?? "");
+  // The Shopify transaction is authoritative. If it no longer has an expiry,
+  // do not send a reminder based only on CreditFlow's stored metadata.
+  const expiresAt = creditTransaction.expiresAt ?? "";
 
   if (!isIssued) {
     if (!expiresAt || new Date(expiresAt).getTime() <= Date.now()) {
