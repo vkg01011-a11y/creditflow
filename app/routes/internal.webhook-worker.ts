@@ -9,6 +9,13 @@ import { processFulfilledOrder } from "../services/fulfillment-reward.server";
 import type { ShopifyFulfilledOrder } from "../services/fulfillment-reward.server";
 import { processRefund, type NormalizedRefundPayload } from "../services/refund-reversal.server";
 import {
+  processCreditEmailNotification,
+  queueExpiringCreditNotifications,
+  getNotificationRetryAt,
+  shouldFailNotification,
+  safeEmailError,
+} from "../services/email-notifications.server";
+import {
   processCustomerDataRequest,
   processCustomerRedaction,
   processShopRedaction,
@@ -32,6 +39,17 @@ type PrivacyJob = {
   attemptCount: number;
 };
 
+type NotificationJob = {
+  id: string;
+  shop: string;
+  customerGid: string;
+  dedupeKey: string;
+  type: "CREDIT_ISSUED" | "CREDIT_EXPIRING";
+  templateKey: string;
+  metadata: Prisma.JsonValue | null;
+  attemptCount: number;
+};
+
 type Counts = {
   webhooksProcessed: number;
   webhooksRetryPending: number;
@@ -43,6 +61,10 @@ type Counts = {
   privacyProcessed: number;
   privacyRetryPending: number;
   privacyFailed: number;
+  notificationsProcessed: number;
+  notificationsSkipped: number;
+  notificationsRetryPending: number;
+  notificationsFailed: number;
 };
 
 const MAX_BATCH_SIZE = 10;
@@ -125,6 +147,39 @@ async function claimPrivacyJobs(limit: number, workerId: string) {
   return db.$queryRawUnsafe<PrivacyJob[]>(sql, limit, workerId);
 }
 
+async function claimNotificationJobs(limit: number, workerId: string) {
+  const sql = [
+    'WITH picked AS (',
+    '  SELECT "id"',
+    '  FROM "Notification"',
+    '  WHERE (',
+    '    "status" = \'QUEUED\'::"NotificationStatus"',
+    '    AND ("scheduledAt" IS NULL OR "scheduledAt" <= NOW())',
+    '  ) OR (',
+    '    "status" = \'PROCESSING\'::"NotificationStatus"',
+    '    AND ("lockedAt" IS NULL OR "lockedAt" <= NOW() - INTERVAL \'15 minutes\')',
+    '  )',
+    '  ORDER BY "scheduledAt" ASC NULLS FIRST, "createdAt" ASC',
+    '  LIMIT $1',
+    '  FOR UPDATE SKIP LOCKED',
+    ')',
+    'UPDATE "Notification" AS item',
+    'SET',
+    '  "status" = \'PROCESSING\'::"NotificationStatus",',
+    '  "attemptCount" = item."attemptCount" + 1,',
+    '  "lockedAt" = NOW(),',
+    '  "lockedBy" = $2,',
+    '  "scheduledAt" = NULL,',
+    '  "lastError" = NULL,',
+    '  "updatedAt" = NOW()',
+    'FROM picked',
+    'WHERE item."id" = picked."id"',
+    'RETURNING item."id", item."shop", item."customerGid", item."dedupeKey", item."type", item."templateKey", item."metadata", item."attemptCount"',
+  ].join("\n");
+
+  return db.$queryRawUnsafe<NotificationJob[]>(sql, limit, workerId);
+}
+
 async function updateWebhookJob(
   job: WebhookJob,
   workerId: string,
@@ -160,6 +215,33 @@ async function updatePrivacyJob(
   },
 ) {
   return db.privacyRequest.updateMany({
+    where: {
+      id: job.id,
+      status: "PROCESSING",
+      lockedBy: workerId,
+    },
+    data: {
+      ...data,
+      lockedAt: null,
+      lockedBy: null,
+    },
+  });
+}
+
+
+async function updateNotificationJob(
+  job: NotificationJob,
+  workerId: string,
+  data: {
+    status: "QUEUED" | "SENT" | "SKIPPED" | "FAILED";
+    sentAt?: Date | null;
+    scheduledAt?: Date | null;
+    provider?: string | null;
+    providerMessageId?: string | null;
+    lastError?: string | null;
+  },
+) {
+  return db.notification.updateMany({
     where: {
       id: job.id,
       status: "PROCESSING",
@@ -392,6 +474,65 @@ async function processWebhookJob(
   }
 }
 
+async function processNotificationJob(
+  job: NotificationJob,
+  workerId: string,
+  counts: Counts,
+) {
+  try {
+    const { admin } = await unauthenticated.admin(job.shop);
+    const result = await processCreditEmailNotification({
+      db,
+      admin,
+      notification: job,
+    });
+
+    if (result.status === "SKIPPED") {
+      await updateNotificationJob(job, workerId, {
+        status: "SKIPPED",
+        provider: "shopify-resend",
+        lastError: null,
+      });
+      counts.notificationsSkipped += 1;
+      return;
+    }
+
+    await updateNotificationJob(job, workerId, {
+      status: "SENT",
+      sentAt: new Date(),
+      provider: "resend",
+      providerMessageId: result.providerMessageId ?? null,
+      lastError: null,
+    });
+    counts.notificationsProcessed += 1;
+  } catch (error) {
+    const message = safeEmailError(error);
+
+    if (shouldFailNotification(job.attemptCount)) {
+      await updateNotificationJob(job, workerId, {
+        status: "FAILED",
+        lastError: message,
+      });
+      counts.notificationsFailed += 1;
+    } else {
+      await updateNotificationJob(job, workerId, {
+        status: "QUEUED",
+        scheduledAt: getNotificationRetryAt(job.attemptCount),
+        lastError: message,
+      });
+      counts.notificationsRetryPending += 1;
+    }
+
+    console.error("[CreditFlow] Customer email delivery failed", {
+      notificationId: job.id,
+      shop: job.shop,
+      type: job.type,
+      attempt: job.attemptCount,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
+}
+
 async function processPrivacyJob(
   job: PrivacyJob,
   workerId: string,
@@ -504,12 +645,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       pendingShopRedactions.map((item) => item.shop),
     );
 
-    const [webhookJobs, privacyJobs] = await Promise.all([
-    claimWebhookJobs(limit, workerId),
-    claimPrivacyJobs(limit, workerId),
-  ]);
+    try {
+      await queueExpiringCreditNotifications(
+        db,
+        new Date(),
+        [...shopsBeingRedacted],
+      );
+    } catch (scanError) {
+      console.error("[CreditFlow] Expiry email scheduling failed", {
+        errorName: scanError instanceof Error ? scanError.name : "UnknownError",
+      });
+    }
 
-  const counts: Counts = {
+    const [webhookJobs, privacyJobs, notificationJobs] = await Promise.all([
+      claimWebhookJobs(limit, workerId),
+      claimPrivacyJobs(limit, workerId),
+      claimNotificationJobs(limit, workerId),
+    ]);
+
+    const counts: Counts = {
     webhooksProcessed: 0,
     webhooksRetryPending: 0,
     webhooksReviewRequired: 0,
@@ -520,6 +674,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     privacyProcessed: 0,
     privacyRetryPending: 0,
     privacyFailed: 0,
+    notificationsProcessed: 0,
+    notificationsSkipped: 0,
+    notificationsRetryPending: 0,
+    notificationsFailed: 0,
   };
 
   const shopRedactionJobs = privacyJobs.filter(
@@ -542,6 +700,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   for (const job of webhookJobs) {
     if (!shopsBeingRedacted.has(job.shop)) {
       await processWebhookJob(job, workerId, counts);
+    }
+  }
+
+  for (const job of notificationJobs) {
+    if (!shopsBeingRedacted.has(job.shop)) {
+      await processNotificationJob(job, workerId, counts);
     }
   }
 
@@ -570,7 +734,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({
       success: true,
       workerId,
-      claimed: webhookJobs.length + privacyJobs.length,
+      claimed: webhookJobs.length + privacyJobs.length + notificationJobs.length,
       ...counts,
     });
   } catch (error) {
