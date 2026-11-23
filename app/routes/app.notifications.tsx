@@ -276,7 +276,7 @@ function MessageField({
 export default function NotificationsPage() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-  const [settings, setSettings] = useState<Settings>(data.settings);
+  const [settings, setSettings] = useState<Settings>(data.settings ?? DEFAULT_SETTINGS);
   const [previewType, setPreviewType] = useState<"issued" | "expiry">("issued");
 
   useEffect(() => {
