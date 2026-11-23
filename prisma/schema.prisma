@@ -92,6 +92,12 @@ enum PrivacyRequestStatus {
   REVIEW_REQUIRED
 }
 
+enum WorkerRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 // ============================================================
 // SHOPIFY AUTHENTICATION SESSION
 // Preserve the model required by Shopify's session adapter.
@@ -469,4 +475,21 @@ model CreditReversal {
   @@unique([shop, refundGid, creditGrantId])
   @@index([shop, status, createdAt])
   @@index([creditGrantId, status])
+}
+
+
+// ============================================================
+// GLOBAL WORKER HEARTBEATS
+// Platform-level operational records; intentionally not shop-owned.
+// Retained for a limited period by the worker itself.
+// ============================================================
+
+model WorkerRun {
+  id          String          @id
+  status      WorkerRunStatus @default(RUNNING)
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  @@index([startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
 }
