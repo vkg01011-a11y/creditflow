@@ -2,6 +2,8 @@ const REQUIRED_SHOPIFY_SCOPES = [
   "read_orders",
   "read_customers",
   "read_products",
+  "read_store_credit_accounts",
+  "read_store_credit_account_transactions",
   "write_store_credit_account_transactions",
 ];
 
