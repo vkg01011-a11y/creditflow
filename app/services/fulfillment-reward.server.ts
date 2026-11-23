@@ -545,6 +545,7 @@ export async function processFulfilledOrder({
                 creditGrantId: grant.id,
                 amount: calculation.amount,
                 currencyCode,
+                issuedEmailMode,
                 expiresAt: expiresAtDate?.toISOString() ?? null,
                 shopifyAccountGid: transaction.accountId,
                 shopifyTransactionGid: transaction.id,
