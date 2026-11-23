@@ -638,34 +638,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await db.workerRun.create({ data: { id: workerId } });
 
   try {
-    // Never start reward processing for a shop with a pending deletion request,
-    // even when that deletion job is beyond this worker's current batch limit.
-    const pendingShopRedactions = await db.privacyRequest.findMany({
-      where: {
-        type: "SHOP_REDACT",
-        status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING", "FAILED", "REVIEW_REQUIRED"] },
-      },
-      select: { shop: true },
-      distinct: ["shop"],
-    });
-    const shopsBeingRedacted = new Set(
-      pendingShopRedactions.map((item) => item.shop),
-    );
+    // First inspect privacy redactions across the full queue, not only the
+    // current worker batch. Shop deletion blocks all work; customer deletion
+    // conservatively pauses customer email delivery for that shop.
+    const [pendingShopRedactions, pendingCustomerRedactions] = await Promise.all([
+      db.privacyRequest.findMany({
+        where: {
+          type: "SHOP_REDACT",
+          status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING", "FAILED", "REVIEW_REQUIRED"] },
+        },
+        select: { shop: true },
+        distinct: ["shop"],
+      }),
+      db.privacyRequest.findMany({
+        where: {
+          type: "CUSTOMERS_REDACT",
+          status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING", "FAILED", "REVIEW_REQUIRED"] },
+        },
+        select: { shop: true },
+        distinct: ["shop"],
+      }),
+    ]);
 
-    // Defer all customer emails for a shop while a customer redaction is
-    // pending. This is intentionally conservative: privacy takes precedence
-    // over notification delivery, and redaction may delete claimed queue rows.
-    const pendingCustomerRedactions = await db.privacyRequest.findMany({
-      where: {
-        type: "CUSTOMERS_REDACT",
-        status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING", "FAILED", "REVIEW_REQUIRED"] },
-      },
-      select: { shop: true },
-      distinct: ["shop"],
-    });
-    const shopsWithCustomerRedactions = new Set(
-      pendingCustomerRedactions.map((item) => item.shop),
-    );
+    const [webhookJobs, privacyJobs] = await Promise.all([
+      claimWebhookJobs(limit, workerId),
+      claimPrivacyJobs(limit, workerId),
+    ]);
+
+    // Include privacy jobs claimed in this cycle, closing the race where a
+    // redaction arrived after the initial pending-request scan.
+    const shopsBeingRedacted = new Set([
+      ...pendingShopRedactions.map((item) => item.shop),
+      ...privacyJobs.filter((job) => job.type === "SHOP_REDACT").map((job) => job.shop),
+    ]);
+    const shopsWithCustomerRedactions = new Set([
+      ...pendingCustomerRedactions.map((item) => item.shop),
+      ...privacyJobs.filter((job) => job.type === "CUSTOMERS_REDACT").map((job) => job.shop),
+    ]);
     const shopsWithPrivacyWork = [
       ...new Set([...shopsBeingRedacted, ...shopsWithCustomerRedactions]),
     ];
@@ -682,11 +691,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
     }
 
-    const [webhookJobs, privacyJobs, notificationJobs] = await Promise.all([
-      claimWebhookJobs(limit, workerId),
-      claimPrivacyJobs(limit, workerId),
-      claimNotificationJobs(limit, workerId, shopsWithPrivacyWork),
-    ]);
+    // Claim email jobs only after this cycle's privacy work is known.
+    const notificationJobs = await claimNotificationJobs(
+      limit,
+      workerId,
+      shopsWithPrivacyWork,
+    );
 
     const counts: Counts = {
     webhooksProcessed: 0,
@@ -729,7 +739,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   for (const job of notificationJobs) {
-    if (!shopsBeingRedacted.has(job.shop)) {
+    if (!shopsWithPrivacyWork.includes(job.shop)) {
       await processNotificationJob(job, workerId, counts);
     }
   }
