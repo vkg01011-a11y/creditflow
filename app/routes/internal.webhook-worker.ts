@@ -162,7 +162,7 @@ async function claimNotificationJobs(
     'WITH picked AS (',
     '  SELECT "id"',
     '  FROM "Notification"',
-    `  WHERE ${exclusion}((',
+    '  WHERE ' + exclusion + '((',
     '    "status" = \'QUEUED\'::"NotificationStatus"',
     '    AND ("scheduledAt" IS NULL OR "scheduledAt" <= NOW())',
     '  ) OR (',
