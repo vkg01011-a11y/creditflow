@@ -67,7 +67,14 @@ enum NotificationStatus {
   QUEUED
   PROCESSING
   SENT
+  SKIPPED
   FAILED
+}
+
+enum CreditIssuedEmailMode {
+  SHOPIFY_NATIVE
+  CREDITFLOW_CUSTOM
+  DISABLED
 }
 
 enum CreditReversalStatus {
@@ -150,6 +157,7 @@ model Merchant {
   notifications   Notification[]
   auditLogs       AuditLog[]
   creditReversals CreditReversal[]
+  emailSettings   EmailNotificationSettings?
 
   @@index([status, createdAt])
 }
@@ -231,6 +239,7 @@ model CreditGrant {
 
   shopifyAccountGid     String?
   shopifyTransactionGid String?
+  expiresAt             DateTime?
 
   errorMessage          String?           @db.Text
   issuedAt              DateTime?
@@ -381,6 +390,9 @@ model Notification {
 
   attemptCount     Int                @default(0)
   lastError        String?            @db.Text
+  metadata         Json?
+  lockedAt         DateTime?
+  lockedBy         String?
 
   scheduledAt      DateTime?
   sentAt           DateTime?
@@ -392,6 +404,46 @@ model Notification {
 
   @@index([shop, customerGid, createdAt])
   @@index([shop, status, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+// ============================================================
+// EMAIL NOTIFICATION SETTINGS
+// Merchant-controlled branded transactional email preferences.
+// Provider credentials are held only in the hosting secret manager.
+// ============================================================
+
+model EmailNotificationSettings {
+  id                    String                 @id @default(cuid())
+  shop                  String                 @unique
+  issuedEmailMode       CreditIssuedEmailMode  @default(SHOPIFY_NATIVE)
+  expiryReminderEnabled Boolean                @default(false)
+  expiryReminderDays    Json                   @default("[7,1]")
+
+  senderName            String?                @db.VarChar(100)
+  replyToEmail          String?                @db.VarChar(254)
+  logoUrl               String?                @db.VarChar(2048)
+  accentColor           String                 @default("#176B5B") @db.VarChar(7)
+
+  issuedSubject         String                 @default("A little something for your next order") @db.VarChar(180)
+  issuedHeadline        String                 @default("You've got store credit!") @db.VarChar(120)
+  issuedMessage         String                 @default("Thank you for shopping with {{ shop_name }}. We've added {{ credit_amount }} to your store credit account.") @db.VarChar(500)
+  issuedCtaLabel        String                 @default("Shop now") @db.VarChar(40)
+
+  expirySubject        String                 @default("Your store credit is about to expire") @db.VarChar(180)
+  expiryHeadline       String                 @default("A little reminder before it expires") @db.VarChar(120)
+  expiryMessage        String                 @default("You still have {{ remaining_amount }} in store credit. Use it before {{ expiry_date }}.") @db.VarChar(500)
+  expiryCtaLabel       String                 @default("Use my credit") @db.VarChar(40)
+
+  footerText           String?                @db.VarChar(240)
+  lastExpiryScanAt     DateTime?
+
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([expiryReminderEnabled, lastExpiryScanAt])
 }
 
 // ============================================================
