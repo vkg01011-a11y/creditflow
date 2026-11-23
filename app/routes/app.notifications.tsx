@@ -6,6 +6,13 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
+type ActionResponse = {
+  success?: boolean;
+  error?: string;
+  message?: string;
+  settings?: Settings;
+};
+
 type Settings = {
   issuedEmailMode: "SHOPIFY_NATIVE" | "CREDITFLOW_CUSTOM" | "DISABLED";
   expiryReminderEnabled: boolean;
@@ -275,13 +282,13 @@ function MessageField({
 
 export default function NotificationsPage() {
   const data = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<ActionResponse>();
   const [settings, setSettings] = useState<Settings>(data.settings ?? DEFAULT_SETTINGS);
   const [previewType, setPreviewType] = useState<"issued" | "expiry">("issued");
 
   useEffect(() => {
-    if (fetcher.data && "settings" in fetcher.data && fetcher.data.settings) {
-      setSettings(fetcher.data.settings as Settings);
+    if (fetcher.data?.settings) {
+      setSettings(fetcher.data.settings);
     }
   }, [fetcher.data]);
 
@@ -315,8 +322,8 @@ export default function NotificationsPage() {
 
   const days = [7, 3, 1];
   const saving = fetcher.state !== "idle";
-  const error = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
-  const success = fetcher.data && "message" in fetcher.data ? fetcher.data.message : null;
+  const error = fetcher.data?.error ?? null;
+  const success = fetcher.data?.message ?? null;
 
   return (
     <s-page heading="Customer emails">
