@@ -1,6 +1,6 @@
 # CreditFlow product-readiness checklist
 
-Updated: 2026-11-21
+Updated: 2026-11-23
 
 This is an engineering readiness tracker, not a claim that the app is approved for production or the Shopify App Store.
 
@@ -21,61 +21,65 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Refund reversals history page.
 - [x] Operations page for webhook/privacy queue visibility.
 - [x] New automation rules start paused.
+- [x] Runtime configuration readiness checks that do not expose secret values.
+- [x] Liveness endpoint (`/healthz`) and database/config readiness endpoint (`/readyz`).
+- [x] One-shot worker runner for managed cron/scheduler services.
+- [x] Docker build definition and secret-excluding Docker build context.
+- [x] Deployment instructions for release migrations, web process, and scheduled worker.
 
-## Validation required on the current branch
+## Verified development-store flows
 
-- [ ] Pull the latest `feature/reliability-webhook-queue` commit locally.
-- [ ] Run Prisma validation and generate client.
-- [ ] Run all unit tests, TypeScript, ESLint, and production build.
-- [ ] Back up the development PostgreSQL database.
-- [ ] Apply the refund-reversal migration to the development database.
-- [ ] Verify migration status is current.
+These checks were performed against the connected development store and local PostgreSQL. They are not a substitute for a clean-install and privacy compliance test pass.
 
-## Shopify development-store test matrix
+- [x] Create a cashback rule paused, then deliberately enable the QA rule.
+- [x] Fulfill an eligible order and verify native Shopify Store Credit plus CreditFlow grant/ledger records.
+- [x] Replay the fulfillment webhook and confirm the reward is not duplicated.
+- [x] Process a partial merchandise refund and verify the proportional native Store Credit debit.
+- [x] Process a second partial refund and verify only the remaining incremental debit.
+- [x] Confirm cumulative refunds reverse the full original ₹1.00 reward, with two ₹0.50 Shopify debit transactions.
+- [x] Replay a refund webhook and confirm one reversal reservation and one debit ledger entry for that delivery.
+- [x] Confirm old ambiguous/invalid refund events remain in manual review without a blind debit.
 
-- [ ] Create a cashback rule and verify it is initially paused.
-- [ ] Enable the rule deliberately and verify it only matches intended orders.
-- [ ] Verify percentage/fixed reward calculation, cap, expiry, product selection, and conditions.
-- [ ] Fulfill an eligible customer order and verify the Shopify native Store Credit transaction and CreditFlow grant/ledger records.
-- [ ] Deliver the same fulfillment webhook twice and verify one reward only.
-- [ ] Refund part of an eligible order and verify the proportional Store Credit debit.
-- [ ] Process a second partial refund and verify only the incremental debit is made.
-- [ ] Fully refund an order and verify cumulative reversal is capped at the original grant.
-- [ ] Redeliver a refund webhook and verify there is no duplicate debit.
-- [ ] Test refunds arriving before the fulfillment worker completes.
+## Automated validation status
+
+- [x] Baseline CI previously passed Prisma migration deployment, 35 tests, TypeScript, ESLint, and production build at the earlier reliability commit.
+- [ ] Run CI for the current production-operations upgrade, including readiness tests and Docker image build.
+- [ ] Apply any CI-required fixes and confirm the final branch head is green.
+
+## Remaining application reliability tests
+
+- [ ] Test refund-before-fulfillment worker ordering.
 - [ ] Test insufficient Store Credit, missing currency/product data, legacy grant, and worker interruption; verify manual-review state and no blind debit retry.
 - [ ] Test stale worker lease recovery and concurrent worker invocations.
 - [ ] Verify customer data request exports reversal and refund-event records.
 - [ ] Verify customer redaction removes/pseudonymizes customer-linked refund references.
 - [ ] Verify shop redaction removes shop-owned records and sessions.
+- [ ] Test install, reauthorization/scope changes, uninstall/reinstall, offline token expiry, and app removal.
 
-## Production blockers
+## Pre-production infrastructure gates
 
-### Commercial and billing
+- [x] Add a container build definition.
+- [x] Add a safe environment template.
+- [x] Add process liveness and runtime/database readiness probes.
+- [x] Add a one-shot scheduled worker command.
+- [ ] Choose the managed hosting project and configure the real HTTPS app URL.
+- [ ] Provision production PostgreSQL with private connectivity, automated backups, and a tested restore.
+- [ ] Configure production Shopify API credentials, scopes, and a 32+ character worker secret.
+- [ ] Configure a one-minute scheduled worker using `npm run worker:once`.
+- [ ] Verify `/healthz` and `/readyz` after deployment.
+- [ ] Configure centralized logs, error monitoring, uptime checks, and alerts for queue age, failures, and review-required financial operations.
+- [ ] Establish retention and deletion policies for webhook payloads, audit metadata, privacy exports, and financial records.
+- [ ] Define a rollback procedure that does not reverse or drop applied database migrations.
 
-- [ ] Decide pricing model, plan limits, trial duration, and free/paid feature boundaries.
-- [ ] Implement Shopify billing or managed pricing integration as appropriate.
-- [ ] Enforce plan entitlements server-side, not only in the user interface.
-- [ ] Implement billing lifecycle handling (approval, active, declined, cancellation, downgrade, uninstall).
+## Commercial and Shopify App Store gates
 
-### Infrastructure and operations
+CreditFlow's current intended launch direction is a free core app, with optional external Pikmora implementation services and qualified merchant referrals as separate revenue channels. Do not add Shopify Billing to the initial release unless this strategy changes.
 
-- [ ] Choose production host and set the true app URL and OAuth redirect URLs.
-- [ ] Provision production PostgreSQL and tested backup/restore procedures.
-- [ ] Configure `CREDITFLOW_WORKER_SECRET` (32+ random characters).
-- [ ] Configure external scheduled POST to `/internal/webhook-worker` every minute.
-- [ ] Monitor scheduler response codes, queue age, failed jobs, review-required jobs, and privacy request deadlines.
-- [ ] Define how operators investigate uncertain Shopify credit mutations before manually reconciling them.
-- [ ] Add alerting for worker outages, webhook backlog, database errors, and privacy deadlines.
-- [ ] Establish a retention policy for webhook payloads, audit records, exports, and financial metadata.
-
-### Shopify App Store readiness
-
+- [ ] Confirm the launch feature boundary and referral disclosures.
 - [ ] Verify Shopify API scopes are minimal and accurately described.
-- [ ] Verify privacy compliance subscriptions are deployed and tested.
+- [ ] Verify privacy compliance webhook subscriptions are deployed and tested.
 - [ ] Publish accessible privacy policy, terms, support contact, and support documentation.
 - [ ] Complete App Store listing assets, feature descriptions, screenshots, and review notes.
-- [ ] Test install, reauthorization/scope changes, uninstall/reinstall, token expiry, and app removal.
 - [ ] Review Shopify policy compliance and data handling with appropriate legal advice.
 
 ## Safety invariants
