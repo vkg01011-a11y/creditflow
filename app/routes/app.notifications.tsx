@@ -357,7 +357,7 @@ export default function NotificationsPage() {
               </div>
 
               <div className="cfe-mode">
-                <label htmlFor="issued-email-mode-shopify">
+                <label htmlFor="issued-email-mode-shopify" aria-label="Shopify native email">
                   <input
                     id="issued-email-mode-shopify"
                     type="radio"
@@ -368,7 +368,7 @@ export default function NotificationsPage() {
                   />
                   <span><strong>Shopify native email</strong><br /><span className="cfe-hint">Shopify sends its standard store-credit email. Customize its template in Shopify Admin → Settings → Notifications.</span></span>
                 </label>
-                <label htmlFor="issued-email-mode-creditflow">
+                <label htmlFor="issued-email-mode-creditflow" aria-label="CreditFlow branded email">
                   <input
                     id="issued-email-mode-creditflow"
                     type="radio"
@@ -379,7 +379,7 @@ export default function NotificationsPage() {
                   />
                   <span><strong>CreditFlow branded email</strong><br /><span className="cfe-hint">CreditFlow sends the custom design shown in the preview. Shopify&apos;s native email is disabled for this grant to prevent duplicates.</span></span>
                 </label>
-                <label htmlFor="issued-email-mode-disabled">
+                <label htmlFor="issued-email-mode-disabled" aria-label="Disable credit-issued email">
                   <input
                     id="issued-email-mode-disabled"
                     type="radio"
