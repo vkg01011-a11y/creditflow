@@ -18,7 +18,8 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test": "node --test"
+    "test": "node --test",
+    "worker:once": "node scripts/worker-once.mjs"
   },
   "type": "module",
   "engines": {
