@@ -5,7 +5,7 @@ application_url = "https://example.com"
 embedded = true
 
 [access_scopes]
-scopes = "read_orders,read_customers,read_products,write_store_credit_account_transactions"
+scopes = "read_orders,read_customers,read_products,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions"
 
 [webhooks]
 api_version = "2026-10"
