@@ -57,6 +57,12 @@ test("requires the full set of Shopify scopes used by the app", () => {
   const result = inspectRuntimeConfiguration(env);
   assert.equal(result.ready, false);
   assert.ok(result.issues.includes("MISSING_SCOPE_read_products"));
+  assert.ok(result.issues.includes("MISSING_SCOPE_read_store_credit_accounts"));
+  assert.ok(
+    result.issues.includes(
+      "MISSING_SCOPE_read_store_credit_account_transactions",
+    ),
+  );
   assert.ok(
     result.issues.includes(
       "MISSING_SCOPE_write_store_credit_account_transactions",
