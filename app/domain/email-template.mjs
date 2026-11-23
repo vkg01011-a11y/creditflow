@@ -37,7 +37,9 @@ function interpolateText(template, values) {
 }
 
 function interpolateHtml(template, values) {
-  return String(template ?? "").replace(
+  // Merchant-authored template markup is plain text, never trusted HTML.
+  // Escape the entire template before inserting escaped placeholder values.
+  return escapeHtml(template ?? "").replace(
     /\{\{\s*([a-z_]+)\s*\}\}/gi,
     (_match, key) => escapeHtml(values[key] ?? ""),
   );
@@ -73,7 +75,7 @@ export function renderCreditEmail({ type, settings = {}, data = {} }) {
   };
 
   const subject = interpolateText(subjectTemplate, values)
-    .replace(/[\\r\\n]+/g, " ")
+    .replace(/[\r\n]+/g, " ")
     .slice(0, 180);
   const headlineText = interpolateText(headlineTemplate, values);
   const messageText = interpolateText(messageTemplate, values);
