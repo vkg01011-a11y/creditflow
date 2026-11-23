@@ -24,6 +24,7 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Runtime configuration readiness checks that do not expose secret values.
 - [x] Liveness endpoint (`/healthz`) and database/config readiness endpoint (`/readyz`).
 - [x] One-shot worker runner for managed cron/scheduler services.
+- [x] Persistent worker heartbeat records, stale detection, and Operations visibility.
 - [x] Docker build definition and secret-excluding Docker build context.
 - [x] Deployment instructions for release migrations, web process, and scheduled worker.
 
