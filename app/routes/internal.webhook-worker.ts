@@ -486,22 +486,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ? Math.min(MAX_BATCH_SIZE, Math.max(1, requestedLimit))
     : 5;
 
-  // Never start reward processing for a shop with a pending deletion request,
-  // even when that deletion job is beyond this worker's current batch limit.
-  const pendingShopRedactions = await db.privacyRequest.findMany({
-    where: {
-      type: "SHOP_REDACT",
-      status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING"] },
-    },
-    select: { shop: true },
-    distinct: ["shop"],
-  });
-  const shopsBeingRedacted = new Set(
-    pendingShopRedactions.map((item) => item.shop),
-  );
-
   const workerId = randomUUID();
-  const [webhookJobs, privacyJobs] = await Promise.all([
+  await db.workerRun.create({ data: { id: workerId } });
+
+  try {
+    // Never start reward processing for a shop with a pending deletion request,
+    // even when that deletion job is beyond this worker's current batch limit.
+    const pendingShopRedactions = await db.privacyRequest.findMany({
+      where: {
+        type: "SHOP_REDACT",
+        status: { in: ["RECEIVED", "PROCESSING", "RETRY_PENDING"] },
+      },
+      select: { shop: true },
+      distinct: ["shop"],
+    });
+    const shopsBeingRedacted = new Set(
+      pendingShopRedactions.map((item) => item.shop),
+    );
+
+    const [webhookJobs, privacyJobs] = await Promise.all([
     claimWebhookJobs(limit, workerId),
     claimPrivacyJobs(limit, workerId),
   ]);
@@ -542,10 +545,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  return Response.json({
-    success: true,
-    workerId,
-    claimed: webhookJobs.length + privacyJobs.length,
-    ...counts,
-  });
+    await db.workerRun.update({
+      where: { id: workerId },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+      },
+    });
+
+    // Keep platform-level heartbeat records for 14 days only.
+    try {
+      await db.workerRun.deleteMany({
+        where: {
+          startedAt: { lt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+        },
+      });
+    } catch (cleanupError) {
+      console.warn(
+        "[CreditFlow] Worker heartbeat retention cleanup skipped",
+        cleanupError instanceof Error ? cleanupError.name : "UnknownError",
+      );
+    }
+
+    return Response.json({
+      success: true,
+      workerId,
+      claimed: webhookJobs.length + privacyJobs.length,
+      ...counts,
+    });
+  } catch (error) {
+    try {
+      await db.workerRun.updateMany({
+        where: { id: workerId, status: "RUNNING" },
+        data: {
+          status: "FAILED",
+          completedAt: new Date(),
+        },
+      });
+    } catch {
+      // The heartbeat itself may be unavailable during a database outage.
+    }
+
+    console.error("[CreditFlow] Worker invocation failed", {
+      workerId,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+
+    return Response.json(
+      { success: false, error: "Worker execution failed." },
+      { status: 500 },
+    );
+  }
 };
