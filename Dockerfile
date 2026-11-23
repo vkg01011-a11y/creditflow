@@ -1,18 +1,20 @@
-FROM node:22-alpine
-RUN apk add --no-cache openssl
-
-EXPOSE 3000
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-ENV NODE_ENV=production
-
-COPY package.json package-lock.json* ./
-
-RUN npm ci --omit=dev && npm cache clean --force
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 
+RUN npx prisma generate
 RUN npm run build
 
-CMD ["npm", "run", "docker-start"]
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+# Database migrations run as a one-off release/pre-deploy command:
+# npm run setup
+CMD ["npm", "run", "start"]
