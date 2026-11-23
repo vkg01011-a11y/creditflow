@@ -3,6 +3,7 @@
 services:
   - type: web
     name: creditflow-staging-web
+    branch: feature/reliability-webhook-queue
     runtime: docker
     region: singapore
     plan: starter
@@ -42,6 +43,7 @@ services:
 
   - type: cron
     name: creditflow-staging-worker
+    branch: feature/reliability-webhook-queue
     runtime: docker
     region: singapore
     plan: 0.5c-512mb
