@@ -9,6 +9,7 @@ import type {
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { decimalPattern } from "../domain/decimal-validation.mjs";
+import { createAutomationRuleSnapshot } from "../domain/automation-rule-snapshot.mjs";
 
 type JsonObject = Record<string, unknown>;
 
@@ -721,6 +722,82 @@ export const action = async ({
         success: true,
         operation,
         ruleId: id,
+      });
+    }
+
+    // Permanently delete the rule definition while retaining grant and ledger history.
+    if (operation === "delete") {
+      const id = ruleId();
+
+      const deletion = await db.$transaction(async (tx) => {
+        // Lock this shop-owned rule row so a concurrent reward grant either
+        // persists its immutable snapshot first or fails its foreign key check.
+        const locked = await tx.$queryRaw<Array<{ id: string; enabled: boolean }>>`
+          SELECT "id", "enabled"
+          FROM "AutomationRule"
+          WHERE "id" = ${id} AND "shop" = ${shop}
+          FOR UPDATE
+        `;
+
+        if (locked.length === 0) {
+          return { status: "NOT_FOUND" as const };
+        }
+
+        if (locked[0].enabled) {
+          return { status: "ACTIVE" as const };
+        }
+
+        const rule = await tx.automationRule.findFirst({
+          where: { id, shop },
+        });
+
+        if (!rule) {
+          return { status: "NOT_FOUND" as const };
+        }
+
+        const preservedGrantCount = await tx.creditGrant.count({
+          where: { shop, ruleId: id },
+        });
+
+        // Migration backfills all existing grants. This defensive fallback
+        // repairs any missing snapshot before the FK is set to NULL.
+        const snapshot = createAutomationRuleSnapshot(rule);
+        await tx.$executeRaw`
+          UPDATE "CreditGrant"
+          SET "ruleNameSnapshot" = ${rule.name},
+              "ruleSnapshot" = ${JSON.stringify(snapshot)}::jsonb
+          WHERE "shop" = ${shop}
+            AND "ruleId" = ${id}
+            AND "ruleSnapshot" IS NULL
+        `;
+
+        await tx.automationRule.delete({ where: { id } });
+
+        return {
+          status: "DELETED" as const,
+          preservedGrantCount,
+        };
+      });
+
+      if (deletion.status === "NOT_FOUND") {
+        return Response.json(
+          { error: "Automation rule not found." },
+          { status: 404 },
+        );
+      }
+
+      if (deletion.status === "ACTIVE") {
+        return Response.json(
+          { error: "Pause this automation before permanently deleting it." },
+          { status: 409 },
+        );
+      }
+
+      return Response.json({
+        success: true,
+        operation,
+        ruleId: id,
+        preservedGrantCount: deletion.preservedGrantCount,
       });
     }
 
