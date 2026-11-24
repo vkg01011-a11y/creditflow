@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAutomationRuleSnapshot } from "../app/domain/automation-rule-snapshot.mjs";
+import {
+  createAutomationRuleSnapshot,
+  resolveRefundRuleConfiguration,
+} from "../app/domain/automation-rule-snapshot.mjs";
 
 test("captures the reward rule configuration required for later refund reconciliation", () => {
   const snapshot = createAutomationRuleSnapshot({
@@ -49,5 +52,67 @@ test("normalizes missing optional rule values without retaining undefined fields
   assert.equal(snapshot.fixedAmount, null);
   assert.equal(snapshot.productIds, "[]");
   assert.equal(snapshot.expiryDays, null);
-  assert.equal("undefined" in snapshot, false);
+});
+
+test("refund reconciliation uses the immutable snapshot after its rule is deleted", () => {
+  const snapshot = createAutomationRuleSnapshot({
+    name: "Original selective cashback",
+    trigger: "ORDER_FULFILLED",
+    priority: 5,
+    rewardType: "PERCENTAGE",
+    rewardBase: "ELIGIBLE_ITEMS",
+    percentage: "5.00",
+    productMode: "INCLUDE",
+    productIds: "[\"101\",\"202\"]",
+    requirePrepaid: false,
+    notifyCustomer: false,
+  });
+
+  const result = resolveRefundRuleConfiguration({
+    ruleSnapshot: snapshot,
+    rule: null,
+  });
+
+  assert.deepEqual(result, {
+    rewardBase: "ELIGIBLE_ITEMS",
+    productMode: "INCLUDE",
+    productIds: "[\"101\",\"202\"]",
+  });
+});
+
+test("refund reconciliation prefers the grant snapshot over a subsequently edited live rule", () => {
+  const snapshot = createAutomationRuleSnapshot({
+    name: "Original rule",
+    trigger: "ORDER_FULFILLED",
+    priority: 5,
+    rewardType: "PERCENTAGE",
+    rewardBase: "ELIGIBLE_ITEMS",
+    percentage: "5.00",
+    productMode: "INCLUDE",
+    productIds: "[\"101\"]",
+    requirePrepaid: false,
+    notifyCustomer: false,
+  });
+
+  const result = resolveRefundRuleConfiguration({
+    ruleSnapshot: snapshot,
+    rule: {
+      rewardBase: "ORDER_SUBTOTAL",
+      productMode: "EXCLUDE",
+      productIds: "[\"999\"]",
+    },
+  });
+
+  assert.deepEqual(result, {
+    rewardBase: "ELIGIBLE_ITEMS",
+    productMode: "INCLUDE",
+    productIds: "[\"101\"]",
+  });
+});
+
+test("refund reconciliation fails closed when neither a snapshot nor a rule exists", () => {
+  assert.throws(
+    () => resolveRefundRuleConfiguration({ ruleSnapshot: null, rule: null }),
+    /no preserved reward-rule configuration/,
+  );
 });
