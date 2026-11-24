@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useRevalidator } from "react-router";
 
@@ -410,6 +410,7 @@ export default function AutomationsPage() {
   const [hasMoreProducts, setHasMoreProducts] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const handledFetcherDataRef = useRef<ActionResponse | null>(null);
 
   const busy = fetcher.state !== "idle";
   const productsBusy = productsFetcher.state !== "idle";
@@ -493,17 +494,25 @@ export default function AutomationsPage() {
   }, [data.rules, filter, search]);
 
   useEffect(() => {
-    if (fetcher.state !== "idle" || !fetcher.data) return;
+    const result = fetcher.data;
 
-    if (fetcher.data.error) {
+    if (fetcher.state !== "idle" || !result) return;
+
+    // A fetcher retains its last response while route revalidation runs.
+    // Handle each response once so an old create/update result cannot close
+    // an edit dialog that the merchant opens afterwards.
+    if (handledFetcherDataRef.current === result) return;
+    handledFetcherDataRef.current = result;
+
+    if (result.error) {
       setNotice({
         type: "error",
-        message: fetcher.data.error,
+        message: result.error,
       });
       return;
     }
 
-    if (fetcher.data.success) {
+    if (result.success) {
       const messages: Record<string, string> = {
         create: "Automation created paused. Review it, then activate it when ready.",
         update: "Automation updated. Changes apply to future order evaluations.",
@@ -516,13 +525,13 @@ export default function AutomationsPage() {
       setNotice({
         type: "success",
         message:
-          messages[fetcher.data.operation ?? ""] ||
+          messages[result.operation ?? ""] ||
           "Automation updated successfully.",
       });
 
       if (
-        fetcher.data.operation === "create" ||
-        fetcher.data.operation === "update"
+        result.operation === "create" ||
+        result.operation === "update"
       ) {
         setBuilderOpen(false);
         setEditingRuleId(null);
@@ -532,7 +541,7 @@ export default function AutomationsPage() {
 
       revalidator.revalidate();
     }
-  }, [fetcher.data, fetcher.state, revalidator]);
+  }, [fetcher.data, fetcher.state, revalidator.revalidate]);
 
   function sendOperation(payload: Record<string, unknown>) {
     setNotice(null);
@@ -1938,6 +1947,7 @@ export default function AutomationsPage() {
                             {!archived ? (
                               <>
                                 <button
+                                  type="button"
                                   className="cfa-button cfa-button--quiet"
                                   disabled={busy}
                                   onClick={() => openEdit(rule)}
