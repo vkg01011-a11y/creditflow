@@ -230,7 +230,9 @@ model CreditGrant {
 
   customerGid           String
   orderGid              String
-  ruleId                String
+  ruleId                String?
+  ruleNameSnapshot      String?
+  ruleSnapshot          Json?
 
   amount                Decimal           @db.Decimal(20, 6)
   currencyCode          String            @db.VarChar(3)
@@ -250,7 +252,7 @@ model CreditGrant {
   updatedAt             DateTime          @updatedAt
 
   merchant      Merchant          @relation(fields: [shop], references: [shop], onDelete: Cascade)
-  rule          AutomationRule    @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  rule          AutomationRule?   @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   ledgerEntries CreditLedgerEntry[]
   reversals     CreditReversal[]
 
