@@ -10,6 +10,7 @@ import {
 import type {
   RewardConditionGroup,
 } from "../domain/reward-engine.mjs";
+import { createAutomationRuleSnapshot } from "../domain/automation-rule-snapshot.mjs";
 
 type ShopifyAdmin = NonNullable<
   Awaited<ReturnType<typeof authenticate.webhook>>["admin"]
@@ -439,6 +440,8 @@ export async function processFulfilledOrder({
           customerGid,
           orderGid,
           ruleId: rule.id,
+          ruleNameSnapshot: rule.name,
+          ruleSnapshot: createAutomationRuleSnapshot(rule) as Prisma.InputJsonValue,
           amount: calculation.amount,
           currencyCode,
           rewardBaseAmount:
