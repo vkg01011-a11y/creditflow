@@ -9,6 +9,7 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Embedded Shopify React Router app shell.
 - [x] PostgreSQL persistence with Prisma.
 - [x] Merchant-scoped automation rules and product selection.
+- [x] Permanent automation-rule deletion for paused rules, with immutable grant snapshots and preserved Shopify Store Credit/refund/ledger history.
 - [x] Exact currency arithmetic with integer minor units for reward calculations.
 - [x] Shopify native Store Credit issuance.
 - [x] Durable fulfillment webhook inbox and worker queue.
