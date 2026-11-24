@@ -4,7 +4,7 @@ ADD COLUMN "ruleNameSnapshot" TEXT,
 ADD COLUMN "ruleSnapshot" JSONB;
 
 -- Backfill existing grants from their currently associated rule before making the relation nullable.
-UPDATE "CreditGrant" AS grant
+UPDATE "CreditGrant" AS credit_grant
 SET
   "ruleNameSnapshot" = rule."name",
   "ruleSnapshot" = jsonb_build_object(
@@ -27,7 +27,7 @@ SET
     'notifyCustomer', rule."notifyCustomer"
   )
 FROM "AutomationRule" AS rule
-WHERE grant."ruleId" = rule."id";
+WHERE credit_grant."ruleId" = rule."id";
 
 ALTER TABLE "CreditGrant"
 ALTER COLUMN "ruleId" DROP NOT NULL;
