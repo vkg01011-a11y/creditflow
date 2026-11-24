@@ -5,6 +5,7 @@ import {
   calculateProportionalReversal,
   sumMoneyAmounts,
 } from "../domain/refund-reversal.mjs";
+import { resolveRefundRuleConfiguration } from "../domain/automation-rule-snapshot.mjs";
 
 type ShopifyAdmin = NonNullable<
   Awaited<ReturnType<typeof authenticate.webhook>>["admin"]
@@ -45,23 +46,21 @@ function parseProductIds(value: string): string[] {
 
 function selectRefundBase(refund: NormalizedRefundPayload, grant: {
   currencyCode: string;
-  rule: { rewardBase: string; productMode: string; productIds: string };
+  rule?: { rewardBase: string; productMode: string; productIds: string } | null;
+  ruleSnapshot?: unknown;
 }) {
   const currencyCode = grant.currencyCode.toUpperCase();
-  const productMode = grant.rule.productMode;
+  const ruleConfig = resolveRefundRuleConfiguration({
+    ruleSnapshot: grant.ruleSnapshot,
+    rule: grant.rule,
+  });
+  const { rewardBase, productMode, productIds: productIdsJson } = ruleConfig;
 
-  if (!["ORDER_SUBTOTAL", "ELIGIBLE_ITEMS"].includes(grant.rule.rewardBase)) {
-    throw new Error("The reward rule has an unsupported reward base.");
-  }
-  if (!["ALL", "INCLUDE", "EXCLUDE"].includes(productMode)) {
-    throw new Error("The reward rule has an unsupported product mode.");
-  }
-
-  const productIds = grant.rule.rewardBase === "ELIGIBLE_ITEMS" && productMode !== "ALL"
-    ? parseProductIds(grant.rule.productIds)
+  const productIds = rewardBase === "ELIGIBLE_ITEMS" && productMode !== "ALL"
+    ? parseProductIds(productIdsJson)
     : [];
 
-  if (grant.rule.rewardBase === "ELIGIBLE_ITEMS" && productMode !== "ALL" &&
+  if (rewardBase === "ELIGIBLE_ITEMS" && productMode !== "ALL" &&
       refund.lineItems.some((item) => item.productId == null)) {
     throw new Error("A refund line is missing its product ID, so eligible-item cashback cannot be calculated safely.");
   }
@@ -80,7 +79,7 @@ function selectRefundBase(refund: NormalizedRefundPayload, grant: {
       );
     }
     const included =
-      grant.rule.rewardBase === "ORDER_SUBTOTAL" ||
+      rewardBase === "ORDER_SUBTOTAL" ||
       productMode === "ALL" ||
       (productMode === "INCLUDE" && productIds.includes(String(item.productId))) ||
       (productMode === "EXCLUDE" && !productIds.includes(String(item.productId)));
