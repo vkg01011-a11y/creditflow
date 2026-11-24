@@ -10,7 +10,7 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /readyz
     preDeployCommand: npm run setup
-    autoDeploy: true
+    autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
         value: production
