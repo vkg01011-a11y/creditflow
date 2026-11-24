@@ -67,5 +67,5 @@ databases:
     user: creditflow_app
     region: singapore
     plan: 0.1c-256mb
-    diskSizeGB: 15
+    diskSizeGB: 5
     ipAllowList: []
