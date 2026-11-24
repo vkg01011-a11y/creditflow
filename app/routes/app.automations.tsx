@@ -102,6 +102,7 @@ type ActionResponse = {
   success?: boolean;
   error?: string;
   operation?: string;
+  preservedGrantCount?: number;
   rule?: { id: string };
 };
 
@@ -529,9 +530,10 @@ export default function AutomationsPage() {
 
       setNotice({
         type: "success",
-        message:
-          messages[result.operation ?? ""] ||
-          "Automation updated successfully.",
+        message: result.operation === "delete"
+          ? `Automation permanently deleted. ${result.preservedGrantCount ?? 0} historical grant(s) and their financial records were retained.`
+          : messages[result.operation ?? ""] ||
+            "Automation updated successfully.",
       });
 
       if (
@@ -913,6 +915,19 @@ export default function AutomationsPage() {
   function restoreRule(rule: Rule) {
     sendOperation({
       operation: "restore",
+      ruleId: rule.id,
+    });
+  }
+
+  function deleteRule(rule: Rule) {
+    const confirmed = window.confirm(
+      `Permanently delete "${rule.name}"? It will be removed from this dashboard and the AutomationRule database table. Existing Shopify Store Credit balances, grant records, Shopify transaction references, refund reversals and ledger history will be retained. This action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    sendOperation({
+      operation: "delete",
       ruleId: rule.id,
     });
   }
@@ -1985,20 +2000,46 @@ export default function AutomationsPage() {
 
                                 <button
                                   className="cfa-button cfa-button--quiet cfa-button--danger"
+                                  type="button"
                                   disabled={busy}
                                   onClick={() => archiveRule(rule)}
                                 >
                                   Archive
                                 </button>
+
+                                <button
+                                  className="cfa-button cfa-button--quiet cfa-button--danger"
+                                  type="button"
+                                  disabled={busy || rule.enabled}
+                                  title={rule.enabled
+                                    ? "Pause this rule before permanently deleting it."
+                                    : "Permanently delete this rule while retaining financial history."}
+                                  onClick={() => deleteRule(rule)}
+                                >
+                                  Delete permanently
+                                </button>
                               </>
                             ) : (
-                              <button
-                                className="cfa-button cfa-button--quiet"
-                                disabled={busy}
-                                onClick={() => restoreRule(rule)}
-                              >
-                                Restore
-                              </button>
+                              <>
+                                <button
+                                  className="cfa-button cfa-button--quiet"
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => restoreRule(rule)}
+                                >
+                                  Restore
+                                </button>
+
+                                <button
+                                  className="cfa-button cfa-button--quiet cfa-button--danger"
+                                  type="button"
+                                  disabled={busy || rule.enabled}
+                                  title="Permanently delete this rule while retaining financial history."
+                                  onClick={() => deleteRule(rule)}
+                                >
+                                  Delete permanently
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
