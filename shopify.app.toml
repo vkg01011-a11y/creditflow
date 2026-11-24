@@ -26,7 +26,6 @@ topics = ["orders/fulfilled"]
 redirect_urls = ["https://creditflow-staging-web.onrender.com/auth/callback"]
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
 
 # Required Shopify App Store privacy compliance webhooks.
