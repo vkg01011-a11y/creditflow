@@ -1,7 +1,7 @@
 
 client_id = "cdf8254d863fe585eb72dbd78a68b732"
 name = "creditflow"
-application_url = "https://example.com"
+application_url = "https://creditflow-staging-web.onrender.com"
 embedded = true
 
 [access_scopes]
@@ -23,7 +23,7 @@ uri = "/webhooks/orders-fulfilled"
 topics = ["orders/fulfilled"]
 
 [auth]
-redirect_urls = ["https://example.com/auth/callback"]
+redirect_urls = ["https://creditflow-staging-web.onrender.com/auth/callback"]
 
 [build]
 include_config_on_deploy = true
