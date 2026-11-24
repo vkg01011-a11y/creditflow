@@ -24,12 +24,11 @@ services:
         fromDatabase:
           name: creditflow-staging-db
           property: connectionString
-      # Prisma migrate deploy does not use the shadow database. This variable
-      # is present for schema tooling; never run prisma migrate dev on staging.
+      # Prisma's schema requires this variable to be present when the CLI loads.
+      # Staging runs migrate deploy only, which does not connect to a shadow DB.
+      # Keep this distinct from DATABASE_URL; never run prisma migrate dev here.
       - key: SHADOW_DATABASE_URL
-        fromDatabase:
-          name: creditflow-staging-db
-          property: connectionString
+        value: postgresql://creditflow_shadow:unused@127.0.0.1:5432/creditflow_shadow?schema=public
       - key: CREDITFLOW_WORKER_SECRET
         generateValue: true
       - key: SHOPIFY_API_KEY
