@@ -5,8 +5,8 @@ function nullableText(value) {
 /**
  * Stores the rule configuration used by a reward grant.
  *
- * This snapshot remains on CreditGrant after an AutomationRule is permanently
- * deleted, so refund reconciliation never depends on a live rule row.
+ * The snapshot remains after the AutomationRule is permanently deleted.
+ * Refund reconciliation prefers this immutable snapshot over the live rule.
  */
 export function createAutomationRuleSnapshot(rule) {
   return {
@@ -28,4 +28,44 @@ export function createAutomationRuleSnapshot(rule) {
     expiryDays: rule.expiryDays ?? null,
     notifyCustomer: Boolean(rule.notifyCustomer),
   };
+}
+
+/**
+ * Resolve the immutable rule settings used to calculate a refund basis.
+ *
+ * Legacy grants can fall back to their still-linked rule when no snapshot is
+ * available. New grants and migrated historical grants should always use the
+ * snapshot, preventing later rule edits from changing prior refund math.
+ */
+export function resolveRefundRuleConfiguration({ ruleSnapshot, rule }) {
+  const snapshotIsRecord =
+    typeof ruleSnapshot === "object" &&
+    ruleSnapshot !== null &&
+    !Array.isArray(ruleSnapshot);
+
+  const source = snapshotIsRecord ? ruleSnapshot : rule;
+
+  if (
+    typeof source !== "object" ||
+    source === null ||
+    Array.isArray(source)
+  ) {
+    throw new Error(
+      "The grant has no preserved reward-rule configuration. Review it manually.",
+    );
+  }
+
+  const rewardBase = String(source.rewardBase ?? "");
+  const productMode = String(source.productMode ?? "");
+  const productIds = String(source.productIds ?? "[]");
+
+  if (!["ORDER_SUBTOTAL", "ELIGIBLE_ITEMS"].includes(rewardBase)) {
+    throw new Error("The stored reward rule has an unsupported reward base.");
+  }
+
+  if (!["ALL", "INCLUDE", "EXCLUDE"].includes(productMode)) {
+    throw new Error("The stored reward rule has an unsupported product mode.");
+  }
+
+  return { rewardBase, productMode, productIds };
 }
