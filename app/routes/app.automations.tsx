@@ -410,7 +410,7 @@ export default function AutomationsPage() {
   const [hasMoreProducts, setHasMoreProducts] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const handledFetcherDataRef = useRef<ActionResponse | null>(null);
+  const pendingActionResponseRef = useRef(false);
 
   const busy = fetcher.state !== "idle";
   const productsBusy = productsFetcher.state !== "idle";
@@ -494,15 +494,20 @@ export default function AutomationsPage() {
   }, [data.rules, filter, search]);
 
   useEffect(() => {
+    // Fetchers retain their last response after an action completes. Only
+    // consume a response when this page has explicitly submitted a new action;
+    // loader revalidation must never reset an edit dialog.
+    if (
+      fetcher.state !== "idle" ||
+      !pendingActionResponseRef.current
+    ) {
+      return;
+    }
+
+    pendingActionResponseRef.current = false;
     const result = fetcher.data;
 
-    if (fetcher.state !== "idle" || !result) return;
-
-    // A fetcher retains its last response while route revalidation runs.
-    // Handle each response once so an old create/update result cannot close
-    // an edit dialog that the merchant opens afterwards.
-    if (handledFetcherDataRef.current === result) return;
-    handledFetcherDataRef.current = result;
+    if (!result) return;
 
     if (result.error) {
       setNotice({
@@ -545,6 +550,7 @@ export default function AutomationsPage() {
 
   function sendOperation(payload: Record<string, unknown>) {
     setNotice(null);
+    pendingActionResponseRef.current = true;
 
     fetcher.submit(JSON.stringify(payload), {
       method: "POST",
