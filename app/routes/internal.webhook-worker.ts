@@ -29,6 +29,8 @@ type WebhookJob = {
   topic: string;
   webhookId: string;
   payload: Prisma.JsonValue | null;
+  triggeredAt: Date | null;
+  receivedAt: Date;
   attemptCount: number;
 };
 
@@ -122,7 +124,7 @@ async function claimWebhookJobs(limit: number, workerId: string) {
     '  "updatedAt" = NOW()',
     'FROM picked',
     'WHERE event."id" = picked."id"',
-    'RETURNING event."id", event."shop", event."webhookId", event."topic", event."payload", event."attemptCount"',
+    'RETURNING event."id", event."shop", event."webhookId", event."topic", event."payload", event."triggeredAt", event."receivedAt", event."attemptCount"',
   ].join("\n");
 
   return db.$queryRawUnsafe<WebhookJob[]>(sql, limit, workerId);
@@ -540,7 +542,7 @@ async function processWebhookJob(
         billing.plan !== "none" &&
         billing.plan !== "unknown"
       ) {
-        await reserveOrderUsageEvent(db, job.shop, orderGid, billing.plan);
+        await reserveOrderUsageEvent(db, job.shop, orderGid, billing.plan, job.triggeredAt ?? job.receivedAt);
       }
     } catch (error) {
       // A billing API outage must not delay core Store Credit automation.
