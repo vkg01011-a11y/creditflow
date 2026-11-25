@@ -373,14 +373,20 @@ export async function processCreditEmailNotification({
   admin: ShopifyAdmin;
   notification: NotificationLike;
 }): Promise<{ status: "SENT" | "SKIPPED"; providerMessageId?: string }> {
-  const billing = await getBillingStatus(admin, notification.shop);
-  if (!billing.emailEntitled) return { status: "SKIPPED" };
+  const metadata = asRecord(notification.metadata);
+  const isIssued = notification.type === "CREDIT_ISSUED";
+
+  // Credit-issued email mode is snapshotted on the grant. Preserve an already
+  // queued branded message because Shopify native email was suppressed for it.
+  // Expiry reminders are future premium actions and require current entitlement.
+  if (!isIssued) {
+    const billing = await getBillingStatus(admin, notification.shop);
+    if (!billing.emailEntitled) return { status: "SKIPPED" };
+  }
 
   const settings = await db.emailNotificationSettings.findUnique({
     where: { shop: notification.shop },
   });
-  const metadata = asRecord(notification.metadata);
-  const isIssued = notification.type === "CREDIT_ISSUED";
 
   // The issue-email channel is snapshotted when the grant is created:
   // changing merchant settings later must not suppress a queued message after
