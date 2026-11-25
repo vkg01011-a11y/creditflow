@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { FormEvent } from "react";
+import type { LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -81,7 +82,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-const initialForm = (ruleId: string, currencyCode: string): FormState => ({
+const initialForm = (ruleId: string): FormState => ({
   ruleId,
   orderSubtotal: "10000",
   paymentStatus: "PREPAID",
@@ -119,7 +120,7 @@ export default function AutomationSimulatorPage() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<SimulationResponse>();
   const [form, setForm] = useState<FormState>(() =>
-    initialForm(data.rules[0]?.id ?? "", data.currencyCode),
+    initialForm(data.rules[0]?.id ?? ""),
   );
   const result = fetcher.data?.simulation;
   const busy = fetcher.state !== "idle";
@@ -128,7 +129,7 @@ export default function AutomationSimulatorPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.ruleId) return;
 
