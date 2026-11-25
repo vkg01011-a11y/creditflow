@@ -1,0 +1,290 @@
+/* CreditFlow UI system — quiet surfaces, crisp type, clear hierarchy. */
+:root {
+  color-scheme: light;
+  --cf-ui-ink: #202923;
+  --cf-ui-muted: #748078;
+  --cf-ui-soft: #f6f8f6;
+  --cf-ui-line: #e5eae6;
+  --cf-ui-line-strong: #d8e0da;
+  --cf-ui-accent: #315b48;
+  --cf-ui-accent-soft: #edf3ef;
+  --cf-ui-radius: 12px;
+  --cf-ui-shadow: 0 1px 2px rgba(27, 39, 31, .035);
+}
+
+html,
+body {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--cf-ui-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: #f7f8f7;
+}
+
+.cf-dashboard,
+.cfa-page,
+.cfe-page,
+.cfsim,
+.cfo-page {
+  color: var(--cf-ui-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  gap: 20px;
+}
+
+.cf-dashboard .cf-title,
+.cfa-page .cfa-title {
+  color: var(--cf-ui-ink);
+  font-weight: 650;
+  letter-spacing: -.045em;
+  line-height: 1.15;
+}
+
+.cf-dashboard .cf-subtitle,
+.cfa-page .cfa-subtitle,
+.cfe-page .cfe-intro,
+.cfsim .cfsim-intro,
+.cfo-page .cfo-intro {
+  color: var(--cf-ui-muted);
+  line-height: 1.65;
+}
+
+.cf-dashboard .cf-card,
+.cfa-page .cfa-stat,
+.cfa-page .cfa-list,
+.cfe-page .cfe-card,
+.cfe-page .cfe-panel,
+.cfsim .cfsim-card,
+.cfo-page .cfo-card,
+.cfo-page .cfo-panel,
+.cfr-stat {
+  background: #fff;
+  border: 1px solid var(--cf-ui-line);
+  border-radius: var(--cf-ui-radius);
+  box-shadow: var(--cf-ui-shadow);
+}
+
+.cf-dashboard .cf-card {
+  padding: 18px;
+}
+
+.cf-dashboard .cf-stat-label,
+.cfa-page .cfa-stat-label,
+.cfe-page .cfe-label,
+.cfo-page .cfo-label,
+.cfr-label {
+  color: var(--cf-ui-muted);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: .005em;
+}
+
+.cf-dashboard .cf-stat-value,
+.cfa-page .cfa-stat-value,
+.cfe-page .cfe-value,
+.cfo-page .cfo-value,
+.cfr-value {
+  color: var(--cf-ui-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+  font-weight: 650;
+}
+
+.cf-dashboard .cf-card-title,
+.cfa-page .cfa-list-title,
+.cfe-page .cfe-panel-title,
+.cfo-page .cfo-panel-title,
+.cfsim .cfsim-card h2 {
+  color: var(--cf-ui-ink);
+  font-weight: 620;
+  letter-spacing: -.02em;
+}
+
+.cf-dashboard .cf-table,
+.cfa-page .cfa-table,
+.cfe-page .cfe-table,
+.cfo-page .cfo-table,
+.cfr-table {
+  color: #344039;
+  font-size: 12px;
+}
+
+.cf-dashboard .cf-table th,
+.cfa-page .cfa-table th,
+.cfe-page .cfe-table th,
+.cfo-page .cfo-table th,
+.cfr-table th {
+  background: #fafbfa;
+  color: #77827a;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: .075em;
+  border-bottom: 1px solid var(--cf-ui-line);
+}
+
+.cf-dashboard .cf-table td,
+.cfa-page .cfa-table td,
+.cfe-page .cfe-table td,
+.cfo-page .cfo-table td,
+.cfr-table td {
+  border-color: #edf0ed;
+}
+
+.cf-dashboard .cf-table tbody tr:hover,
+.cfa-page .cfa-table tbody tr:hover,
+.cfe-page .cfe-table tbody tr:hover,
+.cfo-page .cfo-table tbody tr:hover,
+.cfr-table tbody tr:hover {
+  background: #fbfcfb;
+}
+
+.cfa-page .cfa-button,
+.cfe-page .cfe-button,
+.cfe-page .cfe-save,
+.cfsim .cfsim-button,
+.cfo-page button,
+.cfr-page button {
+  min-height: 36px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+.cfa-page .cfa-button--primary,
+.cfe-page .cfe-save,
+.cfsim .cfsim-button {
+  background: #263b30;
+  border-color: #263b30;
+  color: #fff;
+}
+
+.cfa-page .cfa-button--primary:hover,
+.cfe-page .cfe-save:hover,
+.cfsim .cfsim-button:hover {
+  background: #355344;
+  border-color: #355344;
+}
+
+.cfa-page .cfa-button:not(.cfa-button--primary),
+.cfe-page .cfe-button,
+.cfo-page button {
+  border-color: var(--cf-ui-line-strong);
+  background: #fff;
+  color: #3f4b43;
+}
+
+.cfa-page .cfa-button:not(.cfa-button--primary):hover,
+.cfe-page .cfe-button:hover,
+.cfo-page button:hover {
+  background: #f7f9f7;
+  border-color: #cbd6ce;
+}
+
+.cfa-page input,
+.cfa-page select,
+.cfa-page textarea,
+.cfe-page input,
+.cfe-page select,
+.cfe-page textarea,
+.cfsim input,
+.cfsim select,
+.cfo-page input,
+.cfo-page select,
+.cfo-page textarea {
+  border-color: var(--cf-ui-line-strong);
+  border-radius: 8px;
+  color: var(--cf-ui-ink);
+  font-family: inherit;
+}
+
+.cfa-page input:focus,
+.cfa-page select:focus,
+.cfa-page textarea:focus,
+.cfe-page input:focus,
+.cfe-page select:focus,
+.cfe-page textarea:focus,
+.cfsim input:focus,
+.cfsim select:focus,
+.cfo-page input:focus,
+.cfo-page select:focus,
+.cfo-page textarea:focus {
+  outline: 2px solid rgba(77, 125, 95, .18);
+  outline-offset: 0;
+  border-color: #789783;
+}
+
+.cf-dashboard .cf-note,
+.cfa-page .cfa-info,
+.cfe-page .cfe-notice,
+.cfsim .cfsim-note {
+  background: #f8faf8;
+  border-color: var(--cf-ui-line);
+  border-radius: 9px;
+  color: #66736a;
+}
+
+.cfa-page .cfa-tabs {
+  background: #f0f3f0;
+  border-radius: 9px;
+}
+
+.cfa-page .cfa-tab[aria-pressed="true"] {
+  box-shadow: 0 1px 2px rgba(27, 39, 31, .08);
+  color: #263b30;
+}
+
+.cfe-page .cfe-preview {
+  background: #f7f9f7;
+  border-color: var(--cf-ui-line);
+  border-radius: var(--cf-ui-radius);
+}
+
+.cfe-page .cfe-mail {
+  box-shadow: 0 2px 8px rgba(27, 39, 31, .05);
+}
+
+.cfsim .cfsim-card {
+  border-radius: var(--cf-ui-radius);
+  box-shadow: var(--cf-ui-shadow);
+}
+
+.cfo-page .cfo-panel,
+.cfa-page .cfa-list,
+.cfe-page .cfe-panel {
+  overflow: hidden;
+}
+
+.cfr-stat {
+  padding: 15px 17px;
+}
+
+@media (max-width: 850px) {
+  .cf-dashboard,
+  .cfa-page,
+  .cfe-page,
+  .cfsim,
+  .cfo-page {
+    gap: 16px;
+  }
+
+  .cf-dashboard .cf-card,
+  .cfsim .cfsim-card {
+    padding: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cfa-page *,
+  .cfe-page *,
+  .cfsim *,
+  .cfo-page * {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
