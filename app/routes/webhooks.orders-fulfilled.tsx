@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { normalizeFulfillmentOrder } from "../domain/webhook-payload.mjs";
+import { parseShopifyTriggeredAt } from "../domain/webhook-time.mjs";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const {
@@ -12,6 +13,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     shop,
     topic,
     webhookId,
+    triggeredAt,
   } = await authenticate.webhook(request);
 
   if (topic !== "ORDERS_FULFILLED") {
@@ -36,6 +38,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       topic,
       apiVersion,
       status: "RECEIVED",
+      triggeredAt: parseShopifyTriggeredAt(triggeredAt),
       payload: normalized as Prisma.InputJsonValue,
       payloadHash,
     },
