@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { authenticate } from "../shopify.server";
+import { getBillingStatus } from "./billing.server";
 import { renderCreditEmail } from "../domain/email-template.mjs";
 import { getWebhookRetryDelayMs, MAX_WEBHOOK_ATTEMPTS } from "../domain/webhook-retry.mjs";
 
