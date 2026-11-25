@@ -288,3 +288,389 @@ body {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* Automations — focused rule management and a calmer rule builder. */
+.cfa-page {
+  gap: 22px;
+  padding-top: 5px;
+}
+
+.cfa-page .cfa-head {
+  align-items: center;
+  padding: 2px 0 3px;
+}
+
+.cfa-page .cfa-kicker {
+  color: #718077;
+  font-size: 9px;
+  letter-spacing: .105em;
+}
+
+.cfa-page .cfa-title {
+  margin: 7px 0 6px;
+  font-size: clamp(25px, 2.8vw, 30px);
+  letter-spacing: -.055em;
+}
+
+.cfa-page .cfa-subtitle {
+  max-width: 580px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.cfa-page .cfa-head > button {
+  min-height: 39px;
+  padding: 0 15px;
+  border-radius: 8px;
+  font-size: 11px;
+  box-shadow: 0 1px 2px rgba(28, 45, 34, .09);
+}
+
+.cfa-page .cfa-stats {
+  gap: 12px;
+}
+
+.cfa-page .cfa-stat {
+  position: relative;
+  padding: 16px 17px;
+  border-radius: 11px;
+  box-shadow: var(--cf-ui-shadow);
+}
+
+.cfa-page .cfa-stat-label {
+  margin-bottom: 9px;
+  font-size: 10px;
+  font-weight: 560;
+}
+
+.cfa-page .cfa-stat-value {
+  font-size: 25px;
+  font-weight: 660;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cfa-page .cfa-stat-note {
+  margin-top: 6px;
+  font-size: 9px;
+}
+
+.cfa-page .cfa-info {
+  padding: 11px 13px;
+  align-items: center;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.cfa-page .cfa-info-mark {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.cfa-page .cfa-tools {
+  gap: 10px;
+}
+
+.cfa-page .cfa-search {
+  width: min(360px, 100%);
+  min-height: 39px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  box-shadow: 0 1px 2px rgba(27, 39, 31, .025);
+}
+
+.cfa-page .cfa-tabs {
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid #e9ede9;
+  border-radius: 9px;
+  background: #f6f8f6;
+}
+
+.cfa-page .cfa-tab {
+  min-height: 29px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.cfa-page .cfa-tab[aria-pressed="true"] {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(27, 39, 31, .08), 0 0 0 1px rgba(40, 60, 47, .04);
+}
+
+.cfa-page .cfa-list {
+  border-radius: 11px;
+  box-shadow: var(--cf-ui-shadow);
+}
+
+.cfa-page .cfa-list-head {
+  min-height: 52px;
+  padding: 15px 17px;
+}
+
+.cfa-page .cfa-list-title {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.cfa-page .cfa-table {
+  min-width: 960px;
+  font-size: 11px;
+}
+
+.cfa-page .cfa-table th {
+  padding: 11px 13px;
+  letter-spacing: .075em;
+}
+
+.cfa-page .cfa-table td {
+  padding: 14px 13px;
+  line-height: 1.45;
+}
+
+.cfa-page .cfa-table tbody tr {
+  transition: background-color .14s ease;
+}
+
+.cfa-page .cfa-table tbody tr:hover {
+  background: #fafcfb;
+}
+
+.cfa-page .cfa-rule-name {
+  color: #26342b;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.cfa-page .cfa-rule-desc {
+  max-width: 260px;
+  margin-top: 4px;
+  color: #818c84;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.cfa-page .cfa-status {
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #e2ede5;
+  background: #f1f7f2;
+  color: #42664c;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.cfa-page .cfa-status::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #6b9875;
+}
+
+.cfa-page .cfa-status--paused {
+  border-color: #e7ebe7;
+  background: #f5f6f5;
+  color: #707b73;
+}
+
+.cfa-page .cfa-status--paused::before { background: #9aa49d; }
+
+.cfa-page .cfa-status--archived {
+  border-color: #efe4e2;
+  background: #faf4f3;
+  color: #8a625c;
+}
+
+.cfa-page .cfa-status--archived::before { background: #b8877f; }
+
+.cfa-page .cfa-actions {
+  gap: 6px;
+}
+
+.cfa-page .cfa-actions .cfa-button {
+  min-height: 29px;
+  padding: 5px 9px;
+  font-size: 9px;
+}
+
+.cfa-page .cfa-switch {
+  width: 35px;
+  height: 20px;
+  border: 1px solid #d8dfda;
+  transition: background-color .16s ease;
+}
+
+.cfa-page .cfa-switch[aria-checked="true"] {
+  border-color: #52745d;
+  background: #52745d;
+}
+
+.cfa-page .cfa-switch span {
+  width: 14px;
+  height: 14px;
+}
+
+.cfa-page .cfa-modal-overlay {
+  padding: 22px;
+  background: rgba(17, 28, 21, .42);
+  backdrop-filter: blur(5px);
+}
+
+.cfa-page .cfa-modal {
+  width: min(760px, 100%);
+  max-height: min(92vh, 900px);
+  border-color: rgba(226, 233, 227, .92);
+  border-radius: 15px;
+  box-shadow: 0 24px 80px rgba(12, 24, 16, .22);
+}
+
+.cfa-page .cfa-modal-head {
+  padding: 19px 22px;
+}
+
+.cfa-page .cfa-modal-title {
+  color: #202923;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.025em;
+}
+
+.cfa-page .cfa-modal-subtitle {
+  color: #7a867e;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.cfa-page .cfa-progress {
+  gap: 10px;
+  padding: 13px 22px 0;
+}
+
+.cfa-page .cfa-progress-item {
+  gap: 8px;
+  padding-bottom: 10px;
+  font-size: 10px;
+}
+
+.cfa-page .cfa-step-dot {
+  width: 21px;
+  height: 21px;
+  flex-basis: 21px;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.cfa-page .cfa-progress-item--active .cfa-step-dot {
+  background: #315b48;
+  color: #fff;
+}
+
+.cfa-page .cfa-modal-body {
+  padding: 20px 22px 22px;
+}
+
+.cfa-page .cfa-step-heading {
+  margin-bottom: 5px;
+  color: #26332b;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+
+.cfa-page .cfa-step-help {
+  margin-bottom: 18px;
+  color: #7a867e;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.cfa-page .cfa-form-grid {
+  gap: 15px;
+}
+
+.cfa-page .cfa-field {
+  gap: 7px;
+}
+
+.cfa-page .cfa-label {
+  color: #536057;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.cfa-page .cfa-field input:not([type="checkbox"]),
+.cfa-page .cfa-field select,
+.cfa-page .cfa-field textarea {
+  min-height: 39px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.cfa-page .cfa-field textarea {
+  min-height: 76px;
+}
+
+.cfa-page .cfa-condition-list {
+  gap: 9px;
+}
+
+.cfa-page .cfa-condition-row {
+  gap: 8px;
+  padding: 10px;
+  border-color: #e6ebe7;
+  border-radius: 9px;
+  background: #fbfcfb;
+}
+
+.cfa-page .cfa-condition-row select,
+.cfa-page .cfa-condition-row input {
+  height: 36px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.cfa-page .cfa-modal-footer {
+  padding: 13px 22px;
+  border-top: 1px solid #edf0ed;
+  background: #fcfdfc;
+}
+
+.cfa-page button:focus-visible,
+.cfa-page input:focus-visible,
+.cfa-page select:focus-visible,
+.cfa-page textarea:focus-visible {
+  outline: 2px solid rgba(77, 125, 95, .27);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .cfa-page .cfa-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cfa-page .cfa-tools { align-items: stretch; }
+  .cfa-page .cfa-search { width: 100%; }
+  .cfa-page .cfa-tabs { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 560px) {
+  .cfa-page { gap: 15px; }
+  .cfa-page .cfa-stats { grid-template-columns: 1fr 1fr; }
+  .cfa-page .cfa-stat { padding: 13px; }
+  .cfa-page .cfa-stat-value { font-size: 22px; }
+  .cfa-page .cfa-modal-overlay { padding: 8px; }
+  .cfa-page .cfa-modal { max-height: 96vh; border-radius: 12px; }
+  .cfa-page .cfa-modal-head,
+  .cfa-page .cfa-modal-body { padding-left: 15px; padding-right: 15px; }
+  .cfa-page .cfa-progress { padding-left: 15px; padding-right: 15px; }
+  .cfa-page .cfa-condition-row {
+    grid-template-columns: 1fr 1fr 1fr 28px;
+    overflow-x: auto;
+  }
+}
