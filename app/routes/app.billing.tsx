@@ -21,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let billingError: string | null = null;
   try { billing = await getBillingStatus(admin, session.shop, new URL(request.url).searchParams.has("plan_handle")); }
   catch { billingError = "Shopify billing status could not be refreshed. Check Partner API credentials and permissions."; }
-  return { billing, billingError, pricingUrl: getPlanSelectionUrl(session.shop) };
+  return { billing, billingError, pricingUrl: getPlanSelectionUrl(session.shop), plans: Object.values(BILLING_PLANS) };
 };
 
 export default function BillingPage() {
@@ -36,7 +36,7 @@ export default function BillingPage() {
           <a className="cf-billing-button" href={data.pricingUrl} target="_top" rel="noreferrer">View or change plan</a>
         </section>
         {data.billingError ? <div className="cf-billing-error">{data.billingError}</div> : null}
-        {!billing?.configured ? <div className="cf-billing-error">Billing integration is not fully configured in this environment. Set the Partner organization ID, Partner API access token, Shopify App GID, and App Events API credentials as private hosting secrets. No usage events are sent until Shopify confirms an active plan.</div> : null}
+        {!billing?.configured ? <div className="cf-billing-error">Billing integration is not fully configured in this environment. Set the Partner Dashboard ID, Partner API access token, Shopify App GID, and App Events API credentials as private hosting secrets. No usage events are sent until Shopify confirms an active plan.</div> : null}
         <section className="cf-billing-card"><h2>Current billing cycle</h2><div className="cf-billing-grid">
           <div className="cf-billing-stat"><span>Plan price</span><strong>{billing?.monthlyPrice == null ? "—" : "$" + billing.monthlyPrice.toFixed(2) + "/mo"}</strong></div>
           <div className="cf-billing-stat"><span>Included orders</span><strong>{billing?.unlimited ? "Unlimited" : billing?.includedOrders?.toLocaleString() ?? "—"}</strong></div>
@@ -46,7 +46,7 @@ export default function BillingPage() {
         <p className="cf-billing-copy">{billing?.isTrial ? "Free trial ends " + dateLabel(billing.trialEndsAt) + ". Trial orders are not sent as billable usage events." : "Billing cycle: " + dateLabel(billing?.cycleStart ?? null) + " to " + dateLabel(billing?.cycleEnd ?? null) + "."}{billing?.cancelAtEndOfCycle ? " Cancellation is scheduled at the end of this cycle." : ""}</p>
         {billing?.plan === "business" ? <div className="cf-billing-note">Business includes unlimited order processing. CreditFlow never submits per-order overage events for this plan.</div> : billing?.active ? <div className="cf-billing-note">Additional evaluated orders are $0.10 each after the included allowance. Shopify calculates and invoices usage using the configured meter.</div> : <div className="cf-billing-note">Starter access remains available while no subscription is active. Select the Starter plan in Shopify to enable its 100 included orders and $0.10 overage meter. Until selected, no usage charges are submitted.</div>}
         </section>
-        <section className="cf-billing-card"><h2>CreditFlow plans</h2><div className="cf-plan-grid">{Object.values(BILLING_PLANS).map((plan) => <article className="cf-plan" key={plan.handle}><strong>{plan.name}</strong><div className="cf-plan-price">${plan.monthlyPrice.toFixed(2)}<small>/month</small></div><p>{plan.unlimited ? "Unlimited orders · no usage overage" : plan.includedOrders?.toLocaleString() + " orders included · $0.10 per additional order"}</p><p>{plan.trialDays ? "14-day free trial" : "Free forever"}</p><p>{plan.brandedEmails ? "Branded emails and expiry reminders" : "Shopify-native notifications"}</p></article>)}</div></section>
+        <section className="cf-billing-card"><h2>CreditFlow plans</h2><div className="cf-plan-grid">{data.plans.map((plan) => <article className="cf-plan" key={plan.handle}><strong>{plan.name}</strong><div className="cf-plan-price">${plan.monthlyPrice.toFixed(2)}<small>/month</small></div><p>{plan.unlimited ? "Unlimited orders · no usage overage" : plan.includedOrders?.toLocaleString() + " orders included · $0.10 per additional order"}</p><p>{plan.trialDays ? "14-day free trial" : "Free forever"}</p><p>{plan.brandedEmails ? "Branded emails and expiry reminders" : "Shopify-native notifications"}</p></article>)}</div></section>
         <div className="cf-billing-note">Usage is one distinct, fully fulfilled Shopify order evaluated by CreditFlow, whether or not a reward is issued. Duplicate webhook deliveries and worker retries do not add another unit. Refunds do not erase processed usage. App Events payloads contain no customer or order details.</div>
       </div>
     </s-page>
