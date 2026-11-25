@@ -35,7 +35,7 @@ const SHOP_ID_QUERY = "query CreditFlowShopId { shop { id } }";
 const ACTIVE_SUBSCRIPTION_QUERY = "query CreditFlowActiveSubscription($appId: ID!, $shopId: ID!) { activeSubscription(appId: $appId, shopId: $shopId) { trialEndsAt cancelAtEndOfCycle currentBillingCycle { startTime endTime } items { handle usage { quantity cost { amount currencyCode } } } } }";
 
 function isConfigured() {
-  return Boolean(process.env.SHOPIFY_PARTNER_ORG_ID && process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN && process.env.SHOPIFY_APP_GID && process.env.SHOPIFY_API_KEY && process.env.SHOPIFY_API_SECRET);
+  return Boolean(process.env.SHOPIFY_PARTNER_ID && process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN && process.env.SHOPIFY_APP_GID && process.env.SHOPIFY_API_KEY && process.env.SHOPIFY_API_SECRET);
 }
 function emptyStatus(configured: boolean, shopGid: string | null = null): BillingStatus {
   return { configured, active: false, plan: "none", planName: "No plan selected", monthlyPrice: null, includedOrders: null, overageRate: null, unlimited: false, emailEntitled: false, isTrial: false, trialEndsAt: null, cycleStart: null, cycleEnd: null, cancelAtEndOfCycle: false, usageQuantity: null, usageCostAmount: null, usageCurrencyCode: null, shopGid, message: configured ? "No active Shopify App Pricing subscription was found." : "Shopify App Pricing credentials have not been configured for this environment." };
@@ -49,8 +49,8 @@ export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceR
   const cached = cache.get(shop);
   if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
   if (!isConfigured()) { const value = emptyStatus(false); cache.set(shop, { expiresAt: Date.now() + CACHE_TTL_MS, value }); return value; }
-  const orgId = String(process.env.SHOPIFY_PARTNER_ORG_ID);
-  if (!/^\d+$/.test(orgId)) throw new Error("SHOPIFY_PARTNER_ORG_ID must be the numeric Partner organization ID.");
+  const orgId = String(process.env.SHOPIFY_PARTNER_ID);
+  if (!/^\d+$/.test(orgId)) throw new Error("SHOPIFY_PARTNER_ID must be the numeric Partner organization ID.");
   const shopResponse = await admin.graphql(SHOP_ID_QUERY);
   const shopBody = (await shopResponse.json()) as ShopResponse;
   const shopGid = shopBody.data?.shop?.id;
