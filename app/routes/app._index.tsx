@@ -223,12 +223,15 @@ export default function Dashboard() {
           }
 
           .cf-overview-subtitle {
-            max-width: 580px;
+            max-width: 660px;
             margin: 0;
             color: var(--dash-muted);
             font-size: 12px;
             line-height: 1.6;
           }
+
+          .cf-overview-subtitle a { margin-left: 5px; color: #42674f; font-weight: 650; text-decoration: none; }
+          .cf-overview-subtitle a:hover { text-decoration: underline; }
 
           .cf-overview-actions {
             display: flex;
@@ -601,12 +604,12 @@ export default function Dashboard() {
             <div className="cf-overview-kicker">Store overview</div>
             <h1 className="cf-overview-title">{data.storeName}</h1>
             <p className="cf-overview-subtitle">
-              Your store credit activity, automation status and recent ledger movements.
+              Your store credit activity, rewards and recent ledger movements. <Link to="/app/setup">View setup guide</Link>.
             </p>
           </div>
           <div className="cf-overview-actions">
             <span className="cf-period">Last 30 days</span>
-            <Link className="cf-primary-link" to="/app/automations">Manage automations</Link>
+            <Link className="cf-primary-link" to="/app/automations">Manage rewards</Link>
           </div>
         </header>
 

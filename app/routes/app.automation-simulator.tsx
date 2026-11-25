@@ -160,7 +160,7 @@ export default function AutomationSimulatorPage() {
   }
 
   return (
-    <s-page heading="Automation simulator">
+    <s-page heading="Reward preview">
       <div className="cfsim">
         <style>{`
           .cfsim { --ink:#202a26; --muted:#758078; --line:#e2e8e3; color:var(--ink); display:grid; gap:18px; padding:8px 0 36px; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
@@ -207,7 +207,7 @@ export default function AutomationSimulatorPage() {
 
         <div>
           <p className="cfsim-intro">
-            Test a saved automation against sample order details before enabling it.
+            Preview a saved reward using sample order details before enabling it.
             The simulator evaluates the rule and estimates the reward without issuing Store Credit,
             creating a grant, sending an email or changing the rule.
           </p>
@@ -215,7 +215,7 @@ export default function AutomationSimulatorPage() {
 
         {data.rules.length === 0 ? (
           <div className="cfsim-empty">
-            No available automations found. Create or restore an automation first, then return here to test it.
+            No available automations found. Create or restore a reward first, then return here to preview it.
           </div>
         ) : (
           <div className="cfsim-grid">
@@ -297,7 +297,7 @@ export default function AutomationSimulatorPage() {
                 </div>
                 <div className="cfsim-actions">
                   <button className="cfsim-button" type="submit" disabled={busy || !form.ruleId}>
-                    {busy ? "Evaluating…" : "Test automation"}
+                    {busy ? "Evaluating…" : "Preview reward"}
                   </button>
                 </div>
               </form>

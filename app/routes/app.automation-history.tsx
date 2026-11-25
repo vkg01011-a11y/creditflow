@@ -160,7 +160,7 @@ export default function AutomationHistoryPage() {
     .reduce((total, item) => total + item.count, 0);
 
   return (
-    <s-page heading="Automation history">
+    <s-page heading="Activity">
       <div className="cfe-page">
         <style>{`
           .cfe-page{display:grid;gap:17px;padding:8px 0 36px;color:#202a26;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}

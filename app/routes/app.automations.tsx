@@ -1,7 +1,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData, useRevalidator } from "react-router";
+import { Link, useFetcher, useLoaderData, useRevalidator } from "react-router";
 
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
@@ -952,7 +952,7 @@ export default function AutomationsPage() {
     : rawReward;
 
   return (
-    <s-page heading="Automations">
+    <s-page heading="Rewards">
       <div className="cfa-page">
         <style>{`
           .cfa-page {
@@ -991,6 +991,8 @@ export default function AutomationsPage() {
             flex-wrap: wrap;
             gap: 15px;
           }
+
+          .cfa-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
           .cfa-kicker {
             color: #7b867e;
@@ -1785,19 +1787,27 @@ export default function AutomationsPage() {
 
         <header className="cfa-head">
           <div>
-            <div className="cfa-kicker">Reward management</div>
-            <h1 className="cfa-title">Automations</h1>
+            <div className="cfa-kicker">Store credit rewards</div>
+            <h1 className="cfa-title">Rewards</h1>
             <p className="cfa-subtitle">
-              Manage reward programs and decide which customers qualify.
+              Choose when customers earn store credit, who qualifies and how much they receive.
             </p>
           </div>
 
-          <button
-            className="cfa-button cfa-button--primary"
-            onClick={openCreate}
-          >
-            + Create automation
-          </button>
+          <div className="cfa-head-actions">
+            <Link
+              className="cfa-button cfa-button--quiet"
+              to="/app/automation-simulator"
+            >
+              Preview a reward
+            </Link>
+            <button
+              className="cfa-button cfa-button--primary"
+              onClick={openCreate}
+            >
+              + Create reward
+            </button>
+          </div>
         </header>
 
         {notice && (
@@ -1815,11 +1825,11 @@ export default function AutomationsPage() {
 
         <section className="cfa-stats">
           <article className="cfa-stat">
-            <div className="cfa-stat-label">Total programs</div>
+            <div className="cfa-stat-label">Saved rewards</div>
             <div className="cfa-stat-value">
               {data.rules.filter((rule) => !rule.archivedAt).length}
             </div>
-            <div className="cfa-stat-note">Non-archived rules</div>
+            <div className="cfa-stat-note">Available reward rules</div>
           </article>
 
           <article className="cfa-stat">
@@ -2075,7 +2085,7 @@ export default function AutomationsPage() {
               <header className="cfa-modal-head">
                 <div>
                   <div className="cfa-modal-title" id="cfa-dialog-title">
-                    {editingRuleId ? "Edit automation" : "Create automation"}
+                    {editingRuleId ? "Edit automation" : "Save reward"}
                   </div>
                   <div className="cfa-modal-subtitle">
                     Configure the trigger, conditions and reward.

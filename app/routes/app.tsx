@@ -11,9 +11,7 @@ import {
 } from "react-router";
 
 import { boundary } from "@shopify/shopify-app-react-router/server";
-
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -24,9 +22,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-// This route only provides the static Shopify API key to AppProvider.
-// Dashboard, Automations, and API resource routes authenticate their own data.
-// Keep this shell loader out of revalidation while navigation stays inside /app.
+// The shell only provides the static Shopify API key. Each page loads its own
+// shop-scoped data, so keep this loader out of in-app navigation revalidation.
 export const shouldRevalidate = ({
   currentUrl,
   nextUrl,
@@ -47,14 +44,12 @@ export default function App() {
   return (
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app">Dashboard</s-link>
-        <s-link href="/app/automations">Automations</s-link>
-        <s-link href="/app/automation-simulator">Simulator</s-link>
-        <s-link href="/app/automation-history">Execution history</s-link>
-        <s-link href="/app/privacy-requests">Privacy</s-link>
-        <s-link href="/app/reversals">Refunds</s-link>
+        <s-link href="/app">Overview</s-link>
+        <s-link href="/app/setup">Setup</s-link>
+        <s-link href="/app/automations">Rewards</s-link>
         <s-link href="/app/notifications">Emails</s-link>
-        <s-link href="/app/operations">Operations</s-link>
+        <s-link href="/app/automation-history">Activity</s-link>
+        <s-link href="/app/reversals">Refunds</s-link>
       </s-app-nav>
 
       <Outlet />
