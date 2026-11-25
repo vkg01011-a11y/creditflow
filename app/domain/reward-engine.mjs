@@ -247,7 +247,7 @@ function compareTextList(values, expected, operator) {
  * An absent or empty condition group imposes no additional restriction.
  * Invalid or unavailable customer data fails closed for customer conditions.
  */
-export function matchesRuleConditions({
+export function evaluateRuleConditions({
   order,
   conditions,
   orderSubtotal,
@@ -255,13 +255,15 @@ export function matchesRuleConditions({
   paymentStatus = "UNKNOWN",
   customer = null,
 }) {
-  if (conditions == null) return true;
+  if (conditions == null) {
+    return { logic: "AND", matches: true, results: [] };
+  }
 
   if (
     typeof conditions !== "object" ||
     Array.isArray(conditions)
   ) {
-    return false;
+    return { logic: "AND", matches: false, results: [] };
   }
 
   const logic = conditions.logic ?? "AND";
@@ -271,10 +273,12 @@ export function matchesRuleConditions({
     !["AND", "OR"].includes(logic) ||
     !Array.isArray(rules)
   ) {
-    return false;
+    return { logic: "AND", matches: false, results: [] };
   }
 
-  if (rules.length === 0) return true;
+  if (rules.length === 0) {
+    return { logic, matches: true, results: [] };
+  }
 
   const context = {
     order,
@@ -284,13 +288,23 @@ export function matchesRuleConditions({
     customer,
   };
 
-  const results = rules.map((condition) =>
-    evaluateCondition(condition, context),
-  );
+  const results = rules.map((condition, index) => ({
+    index,
+    field: String(condition?.field ?? "UNKNOWN"),
+    operator: String(condition?.operator ?? "UNKNOWN"),
+    value: String(condition?.value ?? ""),
+    passed: evaluateCondition(condition, context),
+  }));
 
-  return logic === "OR"
-    ? results.some(Boolean)
-    : results.every(Boolean);
+  const matches = logic === "OR"
+    ? results.some((item) => item.passed)
+    : results.every((item) => item.passed);
+
+  return { logic, matches, results };
+}
+
+export function matchesRuleConditions(input) {
+  return evaluateRuleConditions(input).matches;
 }
 
 /**
