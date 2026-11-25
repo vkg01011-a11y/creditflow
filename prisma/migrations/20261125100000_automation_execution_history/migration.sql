@@ -74,28 +74,28 @@ INSERT INTO "AutomationExecution" (
   "updatedAt"
 )
 SELECT
-  md5('credit-grant-history:' || grant."id"),
-  grant."shop",
+  md5('credit-grant-history:' || credit_grant."id"),
+  credit_grant."shop",
   CASE
-    WHEN grant."ruleId" IS NULL
-      THEN 'automation-execution-legacy:' || grant."eventKey"
-    ELSE grant."eventKey"
+    WHEN credit_grant."ruleId" IS NULL
+      THEN 'automation-execution-legacy:' || credit_grant."eventKey"
+    ELSE credit_grant."eventKey"
   END,
-  grant."orderGid",
+  credit_grant."orderGid",
   NULL,
-  grant."ruleId",
+  credit_grant."ruleId",
   COALESCE(
-    grant."ruleNameSnapshot",
-    grant."ruleSnapshot"->>'name',
+    credit_grant."ruleNameSnapshot",
+    credit_grant."ruleSnapshot"->>'name',
     'Historical automation'
   ),
   CASE
-    WHEN (grant."ruleSnapshot"->>'priority') ~ '^[0-9]+$'
-      THEN (grant."ruleSnapshot"->>'priority')::INTEGER
+    WHEN (credit_grant."ruleSnapshot"->>'priority') ~ '^[0-9]+$'
+      THEN (credit_grant."ruleSnapshot"->>'priority')::INTEGER
     ELSE NULL
   END,
-  COALESCE(grant."ruleSnapshot"->>'trigger', 'ORDER_FULFILLED'),
-  CASE grant."status"::TEXT
+  COALESCE(credit_grant."ruleSnapshot"->>'trigger', 'ORDER_FULFILLED'),
+  CASE credit_grant."status"::TEXT
     WHEN 'ISSUED' THEN 'ISSUED'
     WHEN 'REVERSED' THEN 'ISSUED'
     WHEN 'PARTIALLY_REVERSED' THEN 'ISSUED'
@@ -107,25 +107,25 @@ SELECT
   NULL,
   NULL,
   NULL,
-  grant."ruleSnapshot"->>'rewardBase',
-  grant."rewardBaseAmount",
-  grant."amount",
-  grant."currencyCode",
-  grant."id",
+  credit_grant."ruleSnapshot"->>'rewardBase',
+  credit_grant."rewardBaseAmount",
+  credit_grant."amount",
+  credit_grant."currencyCode",
+  credit_grant."id",
   CASE
-    WHEN grant."status"::TEXT IN ('ISSUED', 'REVERSED', 'PARTIALLY_REVERSED')
-      THEN grant."amount"
+    WHEN credit_grant."status"::TEXT IN ('ISSUED', 'REVERSED', 'PARTIALLY_REVERSED')
+      THEN credit_grant."amount"
     ELSE NULL
   END,
   1,
   NULL,
-  grant."createdAt",
+  credit_grant."createdAt",
   CASE
-    WHEN grant."status"::TEXT IN ('ISSUED', 'REVERSED', 'PARTIALLY_REVERSED', 'FAILED', 'REVIEW_REQUIRED')
-      THEN COALESCE(grant."issuedAt", grant."updatedAt")
+    WHEN credit_grant."status"::TEXT IN ('ISSUED', 'REVERSED', 'PARTIALLY_REVERSED', 'FAILED', 'REVIEW_REQUIRED')
+      THEN COALESCE(credit_grant."issuedAt", credit_grant."updatedAt")
     ELSE NULL
   END,
-  grant."createdAt",
-  grant."updatedAt"
-FROM "CreditGrant" AS grant
+  credit_grant."createdAt",
+  credit_grant."updatedAt"
+FROM "CreditGrant" AS credit_grant
 ON CONFLICT ("executionKey") DO NOTHING;
