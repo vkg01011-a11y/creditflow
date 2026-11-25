@@ -605,6 +605,7 @@ model BillingUsageEvent {
   id             String                  @id @default(cuid())
   shop           String
   orderGid       String
+  planAtOccurrence String
   idempotencyKey String                  @unique
   occurredAt     DateTime                @default(now())
   status         BillingUsageEventStatus @default(QUEUED)

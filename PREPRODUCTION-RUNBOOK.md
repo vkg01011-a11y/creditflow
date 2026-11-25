@@ -160,3 +160,5 @@ Core rewards, Shopify-native Store Credit, refund safety, and privacy features r
 ## 10. Launch model
 
 Shopify App Pricing manages subscription and usage billing; do not use the legacy Billing API or create charges directly from app code. Production billing stays inactive until Partner Dashboard plans and production secrets are configured, dev-store testing passes, and release gates are complete.
+
+Billing plan-change safety: the worker snapshots the active billable plan when a fulfilled order is evaluated. It does not enqueue Business or trial orders. At delivery, the active plan must still match the snapshot; plan changes during a queued event route the item to manual review instead of risking a charge under the wrong allowance. A temporary Partner API failure must not delay Store Credit processing and results in no automatic usage event for that order.

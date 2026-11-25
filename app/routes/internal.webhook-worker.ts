@@ -6,7 +6,7 @@ import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { MAX_WEBHOOK_ATTEMPTS, getWebhookRetryDelayMs } from "../domain/webhook-retry.mjs";
 import { processFulfilledOrder } from "../services/fulfillment-reward.server";
-import { reserveOrderUsageEvent, deliverOrderUsageEvent } from "../services/billing.server";
+import { getBillingStatus, reserveOrderUsageEvent, deliverOrderUsageEvent, type MeteredPlanKey } from "../services/billing.server";
 import type { ShopifyFulfilledOrder } from "../services/fulfillment-reward.server";
 import { buildAutomationExecutionKey } from "../domain/automation-execution.mjs";
 import { processRefund, type NormalizedRefundPayload } from "../services/refund-reversal.server";
@@ -56,6 +56,7 @@ type BillingUsageJob = {
   id: string;
   shop: string;
   orderGid: string;
+  planAtOccurrence: MeteredPlanKey;
   idempotencyKey: string;
   occurredAt: Date;
   attemptCount: number;
@@ -143,7 +144,7 @@ async function claimBillingUsageJobs(limit: number, workerId: string) {
     '    "attemptCount" = event."attemptCount" + 1,',
     '    "lockedAt" = NOW(), "lockedBy" = $2, "nextAttemptAt" = NULL, "lastError" = NULL, "updatedAt" = NOW()',
     'FROM picked WHERE event."id" = picked."id"',
-    'RETURNING event."id", event."shop", event."orderGid", event."idempotencyKey", event."occurredAt", event."attemptCount"',
+    'RETURNING event."id", event."shop", event."orderGid", event."planAtOccurrence", event."idempotencyKey", event."occurredAt", event."attemptCount"',
   ].join("\n");
   return db.$queryRawUnsafe<BillingUsageJob[]>(sql, limit, workerId);
 }
@@ -153,6 +154,7 @@ async function processBillingUsageJob(job: BillingUsageJob, workerId: string, co
     const { admin } = await unauthenticated.admin(job.shop);
     const result = await deliverOrderUsageEvent({
       admin, shop: job.shop, orderGid: job.orderGid,
+      planAtOccurrence: job.planAtOccurrence,
       idempotencyKey: job.idempotencyKey, occurredAt: job.occurredAt,
     });
     const saved = await db.billingUsageEvent.updateMany({
@@ -511,14 +513,43 @@ async function processWebhookJob(
     return;
   }
 
-  // One event is reserved per fully fulfilled order that can be evaluated.
-  // The unique shop/order constraint makes duplicate deliveries and retries free.
+  let adminContext: Awaited<ReturnType<typeof unauthenticated.admin>>;
+  try {
+    adminContext = await unauthenticated.admin(job.shop);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Shop authentication failed";
+    await scheduleWebhookFailure(job, workerId, orderGid, message, counts);
+    return;
+  }
+  const admin = adminContext.admin;
+
+  // Capture the plan active when the order is evaluated. Trial and Business
+  // orders never enter the billable outbox, preventing later plan changes from
+  // turning historically non-billable orders into charges.
   if (
     order.fulfillment_status === "fulfilled" &&
     order.customer?.admin_graphql_api_id &&
     /^[A-Z]{3}$/.test(String(order.currency ?? "").toUpperCase())
   ) {
-    await reserveOrderUsageEvent(db, job.shop, orderGid);
+    try {
+      const billing = await getBillingStatus(admin, job.shop);
+      if (
+        billing.active &&
+        !billing.isTrial &&
+        billing.plan !== "business" &&
+        billing.plan !== "none" &&
+        billing.plan !== "unknown"
+      ) {
+        await reserveOrderUsageEvent(db, job.shop, orderGid, billing.plan);
+      }
+    } catch (error) {
+      // A billing API outage must not delay core Store Credit automation.
+      // Without a confirmed plan, this order is not automatically charged.
+      console.warn("[CreditFlow] Order usage eligibility could not be verified", {
+        shop: job.shop,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
   }
   const existingGrant = await db.creditGrant.findFirst({
     where: { shop: job.shop, orderGid },
@@ -564,7 +595,6 @@ async function processWebhookJob(
   try {
     // The shop value originates from Shopify's authenticated webhook,
     // not from a caller-controlled worker parameter.
-    const { admin } = await unauthenticated.admin(job.shop);
     const result = await processFulfilledOrder({
       db,
       admin,

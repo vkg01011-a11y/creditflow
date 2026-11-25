@@ -20,6 +20,7 @@ export const BILLING_PLANS = {
 } as const;
 
 export type BillingPlanKey = keyof typeof BILLING_PLANS;
+export type MeteredPlanKey = Exclude<BillingPlanKey, "business">;
 export type BillingStatus = {
   configured: boolean; active: boolean; plan: BillingPlanKey | "none" | "unknown"; planName: string;
   monthlyPrice: number | null; includedOrders: number | null; overageRate: number | null; unlimited: boolean;
@@ -94,9 +95,9 @@ export function getPlanSelectionUrl(shop: string) {
   return "https://admin.shopify.com/store/" + storeHandle + "/charges/" + appHandle + "/pricing_plans";
 }
 
-export async function reserveOrderUsageEvent(db: PrismaClient, shop: string, orderGid: string) {
+export async function reserveOrderUsageEvent(db: PrismaClient, shop: string, orderGid: string, planAtOccurrence: MeteredPlanKey) {
   const idempotencyKey = createHash("sha256").update("creditflow:orders_processed:" + shop + ":" + orderGid).digest("hex");
-  await db.billingUsageEvent.upsert({ where: { shop_orderGid: { shop, orderGid } }, create: { shop, orderGid, idempotencyKey, occurredAt: new Date() }, update: {} });
+  await db.billingUsageEvent.upsert({ where: { shop_orderGid: { shop, orderGid } }, create: { shop, orderGid, planAtOccurrence, idempotencyKey, occurredAt: new Date() }, update: {} });
 }
 
 let tokenCache: { value: string; expiresAt: number } | null = null;
@@ -112,10 +113,11 @@ async function getAppEventsToken() {
   return tokenCache.value;
 }
 
-export async function deliverOrderUsageEvent(args: { admin: ShopifyAdmin; shop: string; orderGid: string; idempotencyKey: string; occurredAt: Date }): Promise<"SENT" | "SKIPPED" | "REVIEW_REQUIRED"> {
+export async function deliverOrderUsageEvent(args: { admin: ShopifyAdmin; shop: string; orderGid: string; planAtOccurrence: MeteredPlanKey; idempotencyKey: string; occurredAt: Date }): Promise<"SENT" | "SKIPPED" | "REVIEW_REQUIRED"> {
   const status = await getBillingStatus(args.admin, args.shop, true);
   if (!status.active || status.isTrial || status.plan === "business") return "SKIPPED";
   if (status.plan === "none" || status.plan === "unknown" || !status.shopGid || !status.cycleStart || !status.cycleEnd) return "REVIEW_REQUIRED";
+  if (status.plan !== args.planAtOccurrence) return "REVIEW_REQUIRED";
   const start = new Date(status.cycleStart).getTime();
   const end = new Date(status.cycleEnd).getTime();
   const timestamp = args.occurredAt.getTime();

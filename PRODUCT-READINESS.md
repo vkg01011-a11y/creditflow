@@ -97,7 +97,7 @@ These checks were performed against the connected development store and local Po
 
 - [x] Add Partner API active-subscription lookup and plan-handle mapping.
 - [x] Add durable per-shop/per-order usage outbox with stable hashed idempotency keys.
-- [x] Add App Events API sender and trial / Business / billing-cycle guards.
+- [x] Add App Events API sender and trial / Business / billing-cycle / plan-snapshot guards.
 - [x] Add worker retries and review-required state for unresolved usage deliveries.
 - [x] Add the Plan & usage page and Shopify-hosted plan-selection link.
 - [x] Enforce branded-email entitlement in settings, reward issuance, and delivery worker.

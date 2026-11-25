@@ -6,6 +6,7 @@ CREATE TABLE "BillingUsageEvent" (
   "id" TEXT NOT NULL,
   "shop" TEXT NOT NULL,
   "orderGid" TEXT NOT NULL,
+  "planAtOccurrence" TEXT NOT NULL,
   "idempotencyKey" TEXT NOT NULL,
   "occurredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "status" "BillingUsageEventStatus" NOT NULL DEFAULT 'QUEUED',
