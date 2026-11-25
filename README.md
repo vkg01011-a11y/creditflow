@@ -212,7 +212,7 @@ See [PRODUCT-READINESS.md](./PRODUCT-READINESS.md), [RELIABILITY-OPERATIONS.md](
 
 CreditFlow's current plans are Starter $0/month with 100 evaluated orders then $0.10 per additional order; Growth $9/month with 300 included then $0.10/order; Professional $19/month with 1,000 included then $0.10/order; and Business $49/month with unlimited orders and no overage. Growth, Professional, and Business have 14-day trials. Starter is free forever with no trial. Prices are USD/month.
 
-Shopify Partner Dashboard must define the recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, and `business_plan`. Configure the `orders_processed` meter at $0.10/order with included quantities 100/300/1,000 for Starter/Growth/Professional. Do not configure a meter on Business. The three paid plans each have a 14-day trial. These Partner Dashboard values are not created by application code.
+Shopify Partner Dashboard must define the recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, and `business_plan`. Configure the `orders_processed` meter as graduated pricing: Starter 1–100 orders at $0.00/order, then 101+ at $0.10/order; Growth 1–300 at $0.00, then 301+ at $0.10; Professional 1–1,000 at $0.00, then 1,001+ at $0.10. Do not configure a meter on Business. The three paid plans each have a 14-day trial. These Partner Dashboard values are not created by application code.
 
 Set private environment values `SHOPIFY_PARTNER_ORG_ID`, `SHOPIFY_PARTNER_API_ACCESS_TOKEN` (Manage apps permission), `SHOPIFY_APP_GID`, `SHOPIFY_PARTNER_API_VERSION` (default `2026-10`), `SHOPIFY_APP_EVENTS_API_VERSION` (default `2026-10`), and `SHOPIFY_APP_HANDLE` (default `creditflow`). Existing `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` are used for App Events token exchange. Do not commit these secrets.
 
@@ -222,3 +222,5 @@ Core rewards, Store Credit accuracy, refund safety, and privacy workflows remain
 
 
 Plan selection return URL: configure each public plan's Shopify App Pricing welcome link to return to `/app/billing`. The app keeps this route accessible without a subscription so merchants can select or change a plan; all other app routes redirect to Shopify's hosted pricing page once Partner API configuration is active.
+
+Shopify trial policy note: each plan is configured with 14 trial days, but Shopify pools trial days across all plans for the same app/store over a rolling 180-day period. Switching from Growth to Professional does not restart a fresh 14-day trial; remaining trial is reduced by days already used.

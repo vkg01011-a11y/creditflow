@@ -102,7 +102,7 @@ These checks were performed against the connected development store and local Po
 - [x] Add the Plan & usage page and Shopify-hosted plan-selection link.
 - [x] Enforce branded-email entitlement in settings, reward issuance, and delivery worker.
 - [ ] Create public plans with recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, `business_plan`.
-- [ ] Configure `orders_processed` at $0.10/order with included quantities 100 / 300 / 1,000 for Starter / Growth / Professional; Business has no meter.
+- [ ] Configure `orders_processed` as graduated pricing: 1–100 / 1–300 / 1–1,000 units at $0.00, then each additional unit at $0.10 on Starter / Growth / Professional; Business has no meter.
 - [ ] Set 14-day trials on Growth, Professional, and Business; Starter has no trial.
 - [ ] Configure Partner API client with Manage apps permission and set Partner ID/token, app GID, and app secrets in staging.
 - [ ] Verify subscription item handles and no-charge plan selection on a development store.

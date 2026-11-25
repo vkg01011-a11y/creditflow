@@ -147,7 +147,7 @@ Create four monthly public plans in the Shopify Partner Dashboard. Recurring ite
 | Professional | `professional_plan` | $19 | 1,000 | `orders_processed` at $0.10/order after allowance |
 | Business | `business_plan` | $49 | Unlimited | No meter and no overage |
 
-Set 14 free-trial days on Growth, Professional, and Business. Starter is free forever and has no trial. The meter handle is case-sensitive: `orders_processed`. Business must not include this meter.
+Set 14 free-trial days on Growth, Professional, and Business. Starter is free forever and has no trial. Shopify shares used trial days across the app's plans for a given store over a rolling 180-day period, so a plan switch does not restart a full 14-day trial. The meter handle is case-sensitive: `orders_processed`. Business must not include this meter. Set each plan's Shopify welcome link to `/app/billing`.
 
 Add these as private hosting secrets/configuration: `SHOPIFY_PARTNER_ORG_ID`, `SHOPIFY_PARTNER_API_ACCESS_TOKEN` (Partner API client needs Manage apps permission), and `SHOPIFY_APP_GID`. Optional version overrides are `SHOPIFY_PARTNER_API_VERSION` and `SHOPIFY_APP_EVENTS_API_VERSION` (defaults `2026-10`); set `SHOPIFY_APP_HANDLE` if the plan URL handle differs from `creditflow`. The App Events API uses existing `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`. Never commit credentials.
 
