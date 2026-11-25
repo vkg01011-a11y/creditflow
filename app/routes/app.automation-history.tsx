@@ -275,7 +275,7 @@ export default function AutomationHistoryPage() {
                               <div className="cfe-sub">Eligible items: {formatMoney(row.eligibleSubtotal, row.currencyCode)}</div>
                               <div className="cfe-sub">Reward base: {row.rewardBase ? humanize(row.rewardBase) : "—"} · {formatMoney(row.rewardBaseAmount, row.currencyCode)}</div>
                               {conditionResults.length === 0 ? (
-                                <div className="cfe-sub" style={{marginTop:8}}>No configured conditions were evaluated.</div>
+                                <div className="cfe-sub" style={{marginTop:8}}>{row.reason === "LEGACY_GRANT_BACKFILLED" ? "Detailed condition results were not captured for this historical grant." : "No additional conditions were configured for this evaluation."}</div>
                               ) : conditionResults.map((condition, index) => (
                                 <div className="cfe-condition" key={condition.index ?? index}>
                                   <div>

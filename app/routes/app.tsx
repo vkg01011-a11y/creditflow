@@ -1,4 +1,3 @@
-
 import type {
   HeadersFunction,
   LoaderFunctionArgs,
@@ -48,32 +47,14 @@ export default function App() {
   return (
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app">
-          Dashboard
-        </s-link>
-
-        <s-link href="/app/automations">
-          Automations
-        </s-link>
-        <s-link href="/app/automation-simulator">
-          Automation simulator
-        </s-link>
-        <s-link href="/app/automation-history">
-          Automation history
-        </s-link>
-
-        <s-link href="/app/privacy-requests">
-          Privacy requests
-        </s-link>
-        <s-link href="/app/reversals">
-          Refund reversals
-        </s-link>
-        <s-link href="/app/notifications">
-          Customer emails
-        </s-link>
-        <s-link href="/app/operations">
-          Operations
-        </s-link>
+        <s-link href="/app">Dashboard</s-link>
+        <s-link href="/app/automations">Automations</s-link>
+        <s-link href="/app/automation-simulator">Simulator</s-link>
+        <s-link href="/app/automation-history">Execution history</s-link>
+        <s-link href="/app/privacy-requests">Privacy</s-link>
+        <s-link href="/app/reversals">Refunds</s-link>
+        <s-link href="/app/notifications">Emails</s-link>
+        <s-link href="/app/operations">Operations</s-link>
       </s-app-nav>
 
       <Outlet />

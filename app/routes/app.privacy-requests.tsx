@@ -24,102 +24,90 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function statusClass(status: string) {
+  if (status === "COMPLETED") return "cfp-status cfp-status--completed";
+  if (status === "FAILED" || status === "REVIEW_REQUIRED") {
+    return "cfp-status cfp-status--failed";
+  }
+  return "cfp-status";
+}
+
+function humanize(value: string) {
+  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export default function PrivacyRequestsPage() {
   const { requests } = useLoaderData<typeof loader>();
 
   return (
     <s-page heading="Privacy requests">
-      <div style={{ display: "grid", gap: 16, padding: "8px 0 32px" }}>
-        <p style={{ color: "#626b73", maxWidth: 760, lineHeight: 1.6 }}>
+      <div className="cfp-page">
+        <p className="cfp-intro">
           Customer data requests received from Shopify are listed here. Open a
           completed export to review the CreditFlow data associated with that
           customer, then transfer any requested information through your
           approved privacy-response process.
         </p>
 
-        {requests.length === 0 ? (
-          <section
-            style={{
-              border: "1px solid #e4e7e9",
-              borderRadius: 12,
-              padding: 24,
-              background: "#fff",
-            }}
-          >
-            <strong>No customer data requests</strong>
-            <p style={{ color: "#69727a", marginBottom: 0 }}>
-              New Shopify privacy data requests will appear here after they
-              have been processed.
-            </p>
-          </section>
-        ) : (
-          <section
-            style={{
-              border: "1px solid #e4e7e9",
-              borderRadius: 12,
-              overflowX: "auto",
-              background: "#fff",
-            }}
-          >
-            <table
-              style={{
-                borderCollapse: "collapse",
-                width: "100%",
-                minWidth: 680,
-                fontSize: 13,
-              }}
-            >
-              <thead>
-                <tr style={{ background: "#f8f9fa", textAlign: "left" }}>
-                  <th style={{ padding: 14 }}>Request</th>
-                  <th style={{ padding: 14 }}>Customer reference</th>
-                  <th style={{ padding: 14 }}>Received</th>
-                  <th style={{ padding: 14 }}>Status</th>
-                  <th style={{ padding: 14 }}>Export</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map((item) => (
-                  <tr key={item.id} style={{ borderTop: "1px solid #edf0f1" }}>
-                    <td style={{ padding: 14 }}>{item.id}</td>
-                    <td style={{ padding: 14 }}>
-                      {item.customerKey ?? "—"}
-                    </td>
-                    <td style={{ padding: 14 }}>
-                      {formatDate(item.receivedAt)}
-                    </td>
-                    <td style={{ padding: 14 }}>
-                      <span>{item.status}</span>
-                      {item.lastError ? (
-                        <div style={{ color: "#a33", fontSize: 11, marginTop: 4 }}>
-                          {item.lastError}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td style={{ padding: 14 }}>
-                      {item.status === "COMPLETED" ? (
-                        <a
-                          href={
-                            "/api/privacy-requests?requestId=" +
-                            encodeURIComponent(item.id)
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View JSON export
-                        </a>
-                      ) : (
-                        <span style={{ color: "#7b848b" }}>Not ready</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        )}
+        <section className="cfp-panel">
+          <div className="cfp-panel-head">
+            <div className="cfp-panel-title">Customer data requests</div>
+            <span className="cfp-count">{requests.length} {requests.length === 1 ? "request" : "requests"}</span>
+          </div>
 
-        <p style={{ color: "#7b848b", fontSize: 12, maxWidth: 760 }}>
+          {requests.length === 0 ? (
+            <div className="cfp-empty">
+              <div className="cfp-empty-title">No customer data requests</div>
+              <p className="cfp-empty-copy">
+                New Shopify privacy data requests will appear here after they
+                have been processed.
+              </p>
+            </div>
+          ) : (
+            <div className="cfp-table-wrap">
+              <table className="cfp-table">
+                <thead>
+                  <tr>
+                    <th>Request</th>
+                    <th>Customer reference</th>
+                    <th>Received</th>
+                    <th>Status</th>
+                    <th>Export</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {requests.map((item) => (
+                    <tr key={item.id}>
+                      <td><span className="cfp-request-id">{item.id}</span></td>
+                      <td><span className="cfp-reference">{item.customerKey ?? "—"}</span></td>
+                      <td><span className="cfp-date">{formatDate(item.receivedAt)}</span></td>
+                      <td>
+                        <span className={statusClass(item.status)}>{humanize(item.status)}</span>
+                        {item.lastError ? <div className="cfp-error">{item.lastError}</div> : null}
+                      </td>
+                      <td>
+                        {item.status === "COMPLETED" ? (
+                          <a
+                            className="cfp-export"
+                            href={"/api/privacy-requests?requestId=" + encodeURIComponent(item.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            View JSON export
+                          </a>
+                        ) : (
+                          <span className="cfp-muted">Not ready</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <p className="cfp-privacy-note">
           Exports contain customer-linked information. Restrict access and
           retain or transfer exports only as required by your privacy process.
         </p>
