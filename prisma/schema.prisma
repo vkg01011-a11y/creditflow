@@ -380,6 +380,7 @@ model WebhookEvent {
   lastError     String?           @db.Text
 
   receivedAt    DateTime          @default(now())
+  triggeredAt   DateTime?
   processedAt   DateTime?
   nextAttemptAt DateTime?
 
