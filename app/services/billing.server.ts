@@ -95,9 +95,9 @@ export function getPlanSelectionUrl(shop: string) {
   return "https://admin.shopify.com/store/" + storeHandle + "/charges/" + appHandle + "/pricing_plans";
 }
 
-export async function reserveOrderUsageEvent(db: PrismaClient, shop: string, orderGid: string, planAtOccurrence: MeteredPlanKey) {
+export async function reserveOrderUsageEvent(db: PrismaClient, shop: string, orderGid: string, planAtOccurrence: MeteredPlanKey, occurredAt: Date = new Date()) {
   const idempotencyKey = createHash("sha256").update("creditflow:orders_processed:" + shop + ":" + orderGid).digest("hex");
-  await db.billingUsageEvent.upsert({ where: { shop_orderGid: { shop, orderGid } }, create: { shop, orderGid, planAtOccurrence, idempotencyKey, occurredAt: new Date() }, update: {} });
+  await db.billingUsageEvent.upsert({ where: { shop_orderGid: { shop, orderGid } }, create: { shop, orderGid, planAtOccurrence, idempotencyKey, occurredAt }, update: {} });
 }
 
 let tokenCache: { value: string; expiresAt: number } | null = null;
