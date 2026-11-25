@@ -205,6 +205,7 @@ export default function AutomationHistoryPage() {
         <p className="cfe-intro">
           Review how each active automation was evaluated against fulfilled orders.
           History records condition results and reward calculations, then links them to the actual grant outcome.
+          Rules are evaluated by priority; the first eligible rule issues the reward, so lower-priority rules are not evaluated for that order.
           It does not control rules or change Shopify Store Credit balances.
         </p>
 

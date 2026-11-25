@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 
 import { createAutomationRuleSnapshot } from "../app/domain/automation-rule-snapshot.mjs";
+import { buildAutomationExecutionKey } from "../app/domain/automation-execution.mjs";
 
 const runDatabaseIntegrationTests =
   process.env.CREDITFLOW_RUN_DB_TESTS === "1";
@@ -72,6 +73,32 @@ test("deleting a paused automation removes only its definition and preserves fin
       },
     });
 
+    const executionKey = buildAutomationExecutionKey(shop, orderGid, rule.id);
+    const execution = await db.automationExecution.create({
+      data: {
+        shop,
+        executionKey,
+        orderGid,
+        orderName: "#DELETE-TEST",
+        ruleId: rule.id,
+        ruleNameSnapshot: rule.name,
+        rulePrioritySnapshot: rule.priority,
+        trigger: "ORDER_FULFILLED",
+        status: "ISSUED",
+        reason: "REWARD_ISSUED",
+        conditions: { version: 1, logic: "AND", rules: [] },
+        orderSubtotal: "100.00",
+        eligibleSubtotal: "100.00",
+        rewardBase: "ELIGIBLE_ITEMS",
+        rewardBaseAmount: "100.00",
+        estimatedReward: "5.00",
+        currencyCode: "INR",
+        creditGrantId: grant.id,
+        grantAmount: "5.00",
+        completedAt: new Date(),
+      },
+    });
+
     const reversal = await db.creditReversal.create({
       data: {
         shop,
@@ -114,12 +141,13 @@ test("deleting a paused automation removes only its definition and preserves fin
       await tx.automationRule.delete({ where: { id: rule.id } });
     });
 
-    const [deletedRule, preservedGrant, preservedLedger, preservedReversal] =
+    const [deletedRule, preservedGrant, preservedLedger, preservedReversal, preservedExecution] =
       await Promise.all([
         db.automationRule.findFirst({ where: { id: rule.id, shop } }),
         db.creditGrant.findUnique({ where: { id: grant.id } }),
         db.creditLedgerEntry.findUnique({ where: { id: ledger.id } }),
         db.creditReversal.findUnique({ where: { id: reversal.id } }),
+        db.automationExecution.findUnique({ where: { id: execution.id } }),
       ]);
 
     assert.equal(deletedRule, null);
@@ -130,6 +158,11 @@ test("deleting a paused automation removes only its definition and preserves fin
     assert.equal(preservedGrant.shopifyTransactionGid, shopifyCreditTransactionGid);
     assert.equal(preservedLedger?.creditGrantId, grant.id);
     assert.equal(preservedReversal?.creditGrantId, grant.id);
+    assert.ok(preservedExecution);
+    assert.equal(preservedExecution.ruleId, rule.id);
+    assert.equal(preservedExecution.ruleNameSnapshot, rule.name);
+    assert.equal(preservedExecution.creditGrantId, grant.id);
+    assert.equal(preservedExecution.grantAmount.toString(), "5");
   } finally {
     await db.merchant.deleteMany({ where: { shop } });
     await db.$disconnect();

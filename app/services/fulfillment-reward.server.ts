@@ -316,6 +316,23 @@ export async function processFulfilledOrder({
   if (rules.length === 0) {
     const executionKey = buildAutomationExecutionKey(shop, orderGid, null);
     const now = new Date();
+
+    // A delayed webhook may be retried after the merchant has paused or
+    // deleted its last active rule. Close older pending evaluations explicitly.
+    await db.automationExecution.updateMany({
+      where: {
+        shop,
+        orderGid,
+        status: { in: ["PROCESSING", "RETRY_PENDING"] },
+      },
+      data: {
+        status: "SKIPPED",
+        reason: "NO_ACTIVE_RULES_AT_RETRY",
+        errorMessage: null,
+        completedAt: now,
+      },
+    });
+
     await db.automationExecution.upsert({
       where: { executionKey },
       create: {
