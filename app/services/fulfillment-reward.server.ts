@@ -571,7 +571,7 @@ export async function processFulfilledOrder({
       ) {
         const existingGrant = await db.creditGrant.findUnique({
           where: { eventKey },
-          select: { id: true, status: true },
+          select: { id: true, status: true, amount: true },
         });
 
         if (existingGrant?.status === "ISSUED") {
@@ -581,7 +581,7 @@ export async function processFulfilledOrder({
               status: "ISSUED",
               reason: "REWARD_ALREADY_ISSUED",
               creditGrantId: existingGrant.id,
-              grantAmount: calculation.amount,
+              grantAmount: existingGrant.amount.toString(),
               completedAt: new Date(),
             },
           });
