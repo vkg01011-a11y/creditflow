@@ -7,6 +7,7 @@ import { unauthenticated } from "../shopify.server";
 import { MAX_WEBHOOK_ATTEMPTS, getWebhookRetryDelayMs } from "../domain/webhook-retry.mjs";
 import { processFulfilledOrder } from "../services/fulfillment-reward.server";
 import type { ShopifyFulfilledOrder } from "../services/fulfillment-reward.server";
+import { buildAutomationExecutionKey } from "../domain/automation-execution.mjs";
 import { processRefund, type NormalizedRefundPayload } from "../services/refund-reversal.server";
 import {
   processCreditEmailNotification,
@@ -282,10 +283,33 @@ async function scheduleWebhookFailure(
   const grant = await db.creditGrant.findFirst({
     where: { shop: job.shop, orderGid },
     orderBy: { createdAt: "desc" },
-    select: { status: true },
+    select: { id: true, ruleId: true, status: true },
   });
 
   if (grant) {
+    if (grant.ruleId) {
+      await db.automationExecution.updateMany({
+        where: {
+          executionKey: buildAutomationExecutionKey(job.shop, orderGid, grant.ruleId),
+          status: "PROCESSING",
+        },
+        data: isConfirmedGrantStatus(grant.status)
+          ? {
+              status: "ISSUED",
+              reason: "REWARD_ISSUED",
+              creditGrantId: grant.id,
+              completedAt: new Date(),
+              errorMessage: null,
+            }
+          : {
+              status: "REVIEW_REQUIRED",
+              reason: "WEBHOOK_REQUIRES_RECONCILIATION",
+              creditGrantId: grant.id,
+              errorMessage: message.slice(0, 1000),
+              completedAt: new Date(),
+            },
+      });
+    }
     if (isConfirmedGrantStatus(grant.status)) {
       await updateWebhookJob(job, workerId, {
         status: "PROCESSED",
@@ -303,7 +327,18 @@ async function scheduleWebhookFailure(
     return;
   }
 
-  if (job.attemptCount >= MAX_WEBHOOK_ATTEMPTS) {
+  const attemptsExhausted = job.attemptCount >= MAX_WEBHOOK_ATTEMPTS;
+  await db.automationExecution.updateMany({
+    where: { shop: job.shop, orderGid, status: "PROCESSING" },
+    data: {
+      status: attemptsExhausted ? "FAILED" : "RETRY_PENDING",
+      reason: attemptsExhausted ? "WEBHOOK_ATTEMPTS_EXHAUSTED" : "WEBHOOK_RETRY_SCHEDULED",
+      errorMessage: message.slice(0, 1000),
+      completedAt: attemptsExhausted ? new Date() : null,
+    },
+  });
+
+  if (attemptsExhausted) {
     await updateWebhookJob(job, workerId, {
       status: "FAILED",
       lastError: message.slice(0, 2000),
@@ -408,10 +443,26 @@ async function processWebhookJob(
   const existingGrant = await db.creditGrant.findFirst({
     where: { shop: job.shop, orderGid },
     orderBy: { createdAt: "desc" },
-    select: { status: true },
+    select: { id: true, ruleId: true, status: true },
   });
 
   if (existingGrant) {
+    if (!isConfirmedGrantStatus(existingGrant.status) && existingGrant.ruleId) {
+      await db.automationExecution.updateMany({
+        where: {
+          executionKey: buildAutomationExecutionKey(job.shop, orderGid, existingGrant.ruleId),
+          status: "PROCESSING",
+        },
+        data: {
+          status: "REVIEW_REQUIRED",
+          reason: "EXISTING_GRANT_REQUIRES_RECONCILIATION",
+          creditGrantId: existingGrant.id,
+          errorMessage: "A previous grant has no confirmed final outcome. Reconcile it before issuing another credit.",
+          completedAt: new Date(),
+        },
+      });
+    }
+
     if (isConfirmedGrantStatus(existingGrant.status)) {
       await updateWebhookJob(job, workerId, {
         status: "PROCESSED",

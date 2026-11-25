@@ -151,6 +151,7 @@ model Merchant {
   updatedAt           DateTime       @updatedAt
 
   automationRules AutomationRule[]
+  automationExecutions AutomationExecution[]
   grants          CreditGrant[]
   ledgerEntries   CreditLedgerEntry[]
   webhookEvents   WebhookEvent[]
@@ -261,6 +262,48 @@ model CreditGrant {
   @@index([shop, customerGid, createdAt])
   @@index([shop, status, createdAt])
   @@index([ruleId])
+}
+
+// ============================================================
+// AUTOMATION EXECUTION HISTORY
+// Per-order/per-rule evaluation snapshots. ruleId intentionally has no FK,
+// so permanent deletion of a rule does not erase its execution history.
+// ============================================================
+
+model AutomationExecution {
+  id                   String   @id @default(cuid())
+  shop                 String
+  executionKey         String   @unique
+  orderGid             String
+  orderName            String?
+  ruleId               String?
+  ruleNameSnapshot     String
+  rulePrioritySnapshot Int?
+  trigger              String   @default("ORDER_FULFILLED")
+  status               String   @db.VarChar(32)
+  reason               String   @db.VarChar(100)
+  conditions           Json?
+  orderSubtotal        Decimal? @db.Decimal(20, 6)
+  eligibleSubtotal     Decimal? @db.Decimal(20, 6)
+  rewardBase           String?  @db.VarChar(32)
+  rewardBaseAmount     Decimal? @db.Decimal(20, 6)
+  estimatedReward      Decimal? @db.Decimal(20, 6)
+  currencyCode         String?  @db.VarChar(3)
+  creditGrantId        String?
+  grantAmount          Decimal? @db.Decimal(20, 6)
+  attemptCount         Int      @default(1)
+  errorMessage         String?  @db.VarChar(1000)
+  evaluatedAt          DateTime @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([shop, evaluatedAt(sort: Desc), id(sort: Desc)])
+  @@index([shop, ruleId, evaluatedAt(sort: Desc)])
+  @@index([shop, status, evaluatedAt(sort: Desc)])
+  @@index([shop, orderGid])
 }
 
 // ============================================================

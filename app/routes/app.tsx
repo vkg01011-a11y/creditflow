@@ -58,6 +58,9 @@ export default function App() {
         <s-link href="/app/automation-simulator">
           Automation simulator
         </s-link>
+        <s-link href="/app/automation-history">
+          Automation history
+        </s-link>
 
         <s-link href="/app/privacy-requests">
           Privacy requests
