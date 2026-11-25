@@ -6,7 +6,6 @@ import type {
 
 import {
   Outlet,
-  redirect,
   useLoaderData,
   useRouteError,
 } from "react-router";
@@ -17,7 +16,7 @@ import { authenticate } from "../shopify.server";
 import { getBillingStatus, getPlanSelectionUrl } from "../services/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
   const pathname = new URL(request.url).pathname;
 
   // Leave Plan & usage available so merchants can select or change a plan.
@@ -26,7 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       const billing = await getBillingStatus(admin, session.shop);
       if (billing.configured && !billing.active) {
-        throw redirect(getPlanSelectionUrl(session.shop));
+        return redirect(getPlanSelectionUrl(session.shop), { target: "_top" });
       }
     } catch (error) {
       if (error instanceof Response) throw error;
