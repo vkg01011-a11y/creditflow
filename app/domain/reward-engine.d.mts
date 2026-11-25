@@ -44,6 +44,38 @@ export type RewardRule = {
   productIds?: string[];
 };
 
+export type RewardConditionEvaluation = {
+  logic: "AND" | "OR";
+  matches: boolean;
+  results: Array<{
+    index: number;
+    field: string;
+    operator: string;
+    value: string;
+    passed: boolean;
+  }>;
+};
+
+export function evaluateRuleConditions(input: {
+  order: {
+    tags?: string | string[];
+    discount_codes?: Array<string | { code?: string }>;
+    line_items?: Array<{ quantity?: number | string }>;
+    shipping_address?: {
+      country_code?: string;
+      country_code_v2?: string;
+    } | null;
+  };
+  conditions?: unknown;
+  orderSubtotal: string;
+  currencyCode: string;
+  paymentStatus?: "PREPAID" | "COD" | "UNKNOWN";
+  customer?: {
+    tags?: string[];
+    numberOfOrders?: number | string;
+  } | null;
+}): RewardConditionEvaluation;
+
 export function matchesRuleConditions(input: {
   order: {
     tags?: string | string[];
