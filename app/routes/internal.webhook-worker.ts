@@ -291,7 +291,7 @@ async function scheduleWebhookFailure(
       await db.automationExecution.updateMany({
         where: {
           executionKey: buildAutomationExecutionKey(job.shop, orderGid, grant.ruleId),
-          status: "PROCESSING",
+          status: { in: ["PROCESSING", "RETRY_PENDING"] },
         },
         data: isConfirmedGrantStatus(grant.status)
           ? {
@@ -329,7 +329,7 @@ async function scheduleWebhookFailure(
 
   const attemptsExhausted = job.attemptCount >= MAX_WEBHOOK_ATTEMPTS;
   await db.automationExecution.updateMany({
-    where: { shop: job.shop, orderGid, status: "PROCESSING" },
+    where: { shop: job.shop, orderGid, status: { in: ["PROCESSING", "RETRY_PENDING"] } },
     data: {
       status: attemptsExhausted ? "FAILED" : "RETRY_PENDING",
       reason: attemptsExhausted ? "WEBHOOK_ATTEMPTS_EXHAUSTED" : "WEBHOOK_RETRY_SCHEDULED",
@@ -451,7 +451,7 @@ async function processWebhookJob(
       await db.automationExecution.updateMany({
         where: {
           executionKey: buildAutomationExecutionKey(job.shop, orderGid, existingGrant.ruleId),
-          status: "PROCESSING",
+          status: { in: ["PROCESSING", "RETRY_PENDING"] },
         },
         data: {
           status: "REVIEW_REQUIRED",

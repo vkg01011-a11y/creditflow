@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import db from "../db.server";
 import { sessionStorage } from "../shopify.server";
 import { normalizeCustomerPrivacyPayload } from "../domain/webhook-payload.mjs";
+import { buildAutomationExecutionKey } from "../domain/automation-execution.mjs";
 
 type NormalizedCustomerPrivacyPayload = {
   customerGid: string;
@@ -282,13 +283,48 @@ export async function processCustomerDataRequest({
       })
     : [];
 
+  const requestedExecutionOrderIds = Array.from(new Set([
+    ...normalized.requestedOrderIds,
+    ...grants.map((grant) => grant.orderGid),
+  ]));
+  const automationExecutions = requestedExecutionOrderIds.length > 0
+    ? await db.automationExecution.findMany({
+        where: { shop, orderGid: { in: requestedExecutionOrderIds } },
+        orderBy: { evaluatedAt: "asc" },
+        select: {
+          id: true,
+          orderGid: true,
+          orderName: true,
+          ruleId: true,
+          ruleNameSnapshot: true,
+          rulePrioritySnapshot: true,
+          trigger: true,
+          status: true,
+          reason: true,
+          conditions: true,
+          orderSubtotal: true,
+          eligibleSubtotal: true,
+          rewardBase: true,
+          rewardBaseAmount: true,
+          estimatedReward: true,
+          currencyCode: true,
+          creditGrantId: true,
+          grantAmount: true,
+          attemptCount: true,
+          errorMessage: true,
+          evaluatedAt: true,
+          completedAt: true,
+        },
+      })
+    : [];
+
   const dataSnapshot = {
     generatedAt: new Date().toISOString(),
     shop,
     customerGid,
     requestedOrderIds: normalized.requestedOrderIds,
     storedDataDescription:
-      "CreditFlow stores Shopify customer and order identifiers, reward grant and transaction metadata, notification metadata, audit records, amounts, currencies, statuses, and timestamps. Shopify remains the authoritative store-credit balance.",
+      "CreditFlow stores Shopify customer and order identifiers, reward grant and transaction metadata, automation evaluation history, notification metadata, audit records, amounts, currencies, statuses, and timestamps. Shopify remains the authoritative store-credit balance.",
     grants: grants.map((grant) => ({
       ...grant,
       amount: grant.amount.toString(),
@@ -297,6 +333,16 @@ export async function processCustomerDataRequest({
       issuedAt: grant.issuedAt?.toISOString() ?? null,
       createdAt: grant.createdAt.toISOString(),
       updatedAt: grant.updatedAt.toISOString(),
+    })),
+    automationExecutions: automationExecutions.map((execution) => ({
+      ...execution,
+      orderSubtotal: execution.orderSubtotal?.toString() ?? null,
+      eligibleSubtotal: execution.eligibleSubtotal?.toString() ?? null,
+      rewardBaseAmount: execution.rewardBaseAmount?.toString() ?? null,
+      estimatedReward: execution.estimatedReward?.toString() ?? null,
+      grantAmount: execution.grantAmount?.toString() ?? null,
+      evaluatedAt: execution.evaluatedAt.toISOString(),
+      completedAt: execution.completedAt?.toISOString() ?? null,
     })),
     reversals: reversals.map((reversal) => ({
       ...reversal,
@@ -432,6 +478,27 @@ export async function processCustomerRedaction({
       ...normalized.requestedOrderIds,
       ...grants.map((grant) => grant.orderGid),
     ]));
+
+    const executions = customerOrderIds.length > 0
+      ? await tx.automationExecution.findMany({
+          where: { shop, orderGid: { in: customerOrderIds } },
+          select: { id: true, orderGid: true, ruleId: true },
+        })
+      : [];
+
+    for (const execution of executions) {
+      const redactedOrderGid = stableRedactedKey(execution.orderGid, shop);
+      await tx.automationExecution.update({
+        where: { id: execution.id },
+        data: {
+          orderGid: redactedOrderGid,
+          orderName: null,
+          executionKey: buildAutomationExecutionKey(shop, redactedOrderGid, execution.ruleId),
+          conditions: Prisma.DbNull,
+          errorMessage: null,
+        },
+      });
+    }
 
     await tx.webhookEvent.deleteMany({
       where: {

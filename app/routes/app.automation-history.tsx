@@ -43,7 +43,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
     db.automationExecution.groupBy({
       by: ["status"],
-      where: { shop },
+      where,
       _count: { _all: true },
     }),
     db.automationExecution.count({ where }),
@@ -93,7 +93,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 function humanize(value: string) {
-  return value.toLowerCase().replaceAll("_", " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
+  return value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatDate(value: string) {
