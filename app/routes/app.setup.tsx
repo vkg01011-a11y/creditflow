@@ -65,13 +65,6 @@ export default function SetupPage() {
   const data = useLoaderData<typeof loader>();
   const progress = Math.round((data.readySteps / 3) * 100);
 
-  const rewardStatus =
-    data.rewardRuleCount === 0
-      ? "Not started"
-      : data.activeRewardCount > 0
-        ? "Rewards available"
-        : "Saved · paused";
-
   const emailStatus =
     data.emailMode === "SHOPIFY_NATIVE"
       ? "Shopify notifications"
@@ -464,7 +457,7 @@ export default function SetupPage() {
 
         <p className="cfs-note">
           Important: CreditFlow manages reward rules and records. Shopify remains the
-          authoritative source for each customer's available store credit balance.
+          authoritative source for each customer&apos;s available store credit balance.
           This guide never activates a rule or issues credit.
         </p>
       </div>
