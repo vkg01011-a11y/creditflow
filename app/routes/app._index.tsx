@@ -1,6 +1,6 @@
 
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { Link, useLoaderData } from "react-router";
 
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
@@ -606,7 +606,7 @@ export default function Dashboard() {
           </div>
           <div className="cf-overview-actions">
             <span className="cf-period">Last 30 days</span>
-            <a className="cf-primary-link" href="/app/automations">Manage automations</a>
+            <Link className="cf-primary-link" to="/app/automations">Manage automations</Link>
           </div>
         </header>
 
