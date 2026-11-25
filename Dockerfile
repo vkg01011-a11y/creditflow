@@ -2,6 +2,12 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 
+# Prisma's Linux query engine needs OpenSSL libraries. Install them explicitly
+# so Prisma can select the correct engine target instead of guessing.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
