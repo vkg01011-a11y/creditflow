@@ -126,10 +126,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     create: { shop },
     update: {},
   });
+  const safeSettings = serializeSettings(stored);
+  if (!billing?.emailEntitled) {
+    if (safeSettings.issuedEmailMode === "CREDITFLOW_CUSTOM") {
+      safeSettings.issuedEmailMode = "SHOPIFY_NATIVE";
+    }
+    safeSettings.expiryReminderEnabled = false;
+  }
 
   return {
     shop,
-    settings: serializeSettings(stored),
+    settings: safeSettings,
     emailProviderConfigured: Boolean(
       process.env.RESEND_API_KEY && process.env.CREDITFLOW_EMAIL_FROM,
     ),
