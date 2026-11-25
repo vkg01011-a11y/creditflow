@@ -517,7 +517,7 @@ body {
   height: 14px;
 }
 
-.cfa-page .cfa-modal-overlay {
+.cfa-page .cfa-overlay {
   padding: 22px;
   background: rgba(17, 28, 21, .42);
   backdrop-filter: blur(5px);
@@ -638,7 +638,7 @@ body {
   font-size: 10px;
 }
 
-.cfa-page .cfa-modal-footer {
+.cfa-page .cfa-modal-foot {
   padding: 13px 22px;
   border-top: 1px solid #edf0ed;
   background: #fcfdfc;
@@ -664,7 +664,7 @@ body {
   .cfa-page .cfa-stats { grid-template-columns: 1fr 1fr; }
   .cfa-page .cfa-stat { padding: 13px; }
   .cfa-page .cfa-stat-value { font-size: 22px; }
-  .cfa-page .cfa-modal-overlay { padding: 8px; }
+  .cfa-page .cfa-overlay { padding: 8px; }
   .cfa-page .cfa-modal { max-height: 96vh; border-radius: 12px; }
   .cfa-page .cfa-modal-head,
   .cfa-page .cfa-modal-body { padding-left: 15px; padding-right: 15px; }
