@@ -74,6 +74,7 @@ test("deleting a paused automation removes only its definition and preserves fin
     });
 
     const executionKey = buildAutomationExecutionKey(shop, orderGid, rule.id);
+    assert.equal(executionKey, grant.eventKey);
     const execution = await db.automationExecution.create({
       data: {
         shop,

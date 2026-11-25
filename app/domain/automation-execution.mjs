@@ -1,13 +1,17 @@
 export function buildAutomationExecutionKey(shop, orderGid, ruleId) {
-  const parts = [
-    String(shop ?? "").trim(),
-    String(orderGid ?? "").trim(),
-    String(ruleId ?? "NO_ACTIVE_RULES").trim(),
-  ];
-  if (!parts[0] || !parts[1]) {
+  const shopKey = String(shop ?? "").trim();
+  const orderKey = String(orderGid ?? "").trim();
+  const ruleKey = ruleId == null ? "" : String(ruleId).trim();
+
+  if (!shopKey || !orderKey) {
     throw new TypeError("Shop and order identifiers are required for execution history.");
   }
-  return `automation-execution:${parts.map((part) => encodeURIComponent(part)).join(":")}`;
+
+  // Rule executions share the grant's event key. This makes the migration
+  // backfill deterministic and preserves one record per order/rule pair.
+  return ruleKey
+    ? `fulfilled:${shopKey}:${orderKey}:${ruleKey}`
+    : `automation-execution:${shopKey}:${orderKey}:NO_ACTIVE_RULES`;
 }
 
 export function classifyAutomationExecution({ conditionEvaluation, calculation }) {

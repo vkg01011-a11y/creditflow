@@ -9,7 +9,7 @@ test("execution keys are deterministic and separate rule identifiers", () => {
   const key = buildAutomationExecutionKey("store.myshopify.com", "gid://shopify/Order/1", "rule-a");
   assert.equal(key, buildAutomationExecutionKey("store.myshopify.com", "gid://shopify/Order/1", "rule-a"));
   assert.notEqual(key, buildAutomationExecutionKey("store.myshopify.com", "gid://shopify/Order/1", "rule-b"));
-  assert.match(key, /^automation-execution:/);
+  assert.equal(key, "fulfilled:store.myshopify.com:gid://shopify/Order/1:rule-a");
 });
 
 test("condition mismatch is distinguished from reward ineligibility", () => {
@@ -39,4 +39,11 @@ test("eligible calculations remain processing until the credit grant is confirme
 test("execution keys reject missing shop or order identifiers", () => {
   assert.throws(() => buildAutomationExecutionKey("", "order", "rule"));
   assert.throws(() => buildAutomationExecutionKey("shop", "", "rule"));
+});
+
+test("no-active-rule keys use a distinct deterministic namespace", () => {
+  assert.equal(
+    buildAutomationExecutionKey("store.myshopify.com", "gid://shopify/Order/1", null),
+    "automation-execution:store.myshopify.com:gid://shopify/Order/1:NO_ACTIVE_RULES",
+  );
 });

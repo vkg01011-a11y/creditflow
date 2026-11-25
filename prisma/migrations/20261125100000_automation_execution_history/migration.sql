@@ -41,3 +41,91 @@ CREATE INDEX "AutomationExecution_shop_status_evaluatedAt_idx"
   ON "AutomationExecution"("shop", "status", "evaluatedAt" DESC);
 CREATE INDEX "AutomationExecution_shop_orderGid_idx"
   ON "AutomationExecution"("shop", "orderGid");
+
+
+-- Backfill a useful historical timeline from existing grant records.
+-- Older grants have no stored condition outcomes, so those fields remain NULL.
+INSERT INTO "AutomationExecution" (
+  "id",
+  "shop",
+  "executionKey",
+  "orderGid",
+  "orderName",
+  "ruleId",
+  "ruleNameSnapshot",
+  "rulePrioritySnapshot",
+  "trigger",
+  "status",
+  "reason",
+  "conditions",
+  "orderSubtotal",
+  "eligibleSubtotal",
+  "rewardBase",
+  "rewardBaseAmount",
+  "estimatedReward",
+  "currencyCode",
+  "creditGrantId",
+  "grantAmount",
+  "attemptCount",
+  "errorMessage",
+  "evaluatedAt",
+  "completedAt",
+  "createdAt",
+  "updatedAt"
+)
+SELECT
+  md5('credit-grant-history:' || grant."id"),
+  grant."shop",
+  CASE
+    WHEN grant."ruleId" IS NULL
+      THEN 'automation-execution-legacy:' || grant."eventKey"
+    ELSE grant."eventKey"
+  END,
+  grant."orderGid",
+  NULL,
+  grant."ruleId",
+  COALESCE(
+    grant."ruleNameSnapshot",
+    grant."ruleSnapshot"->>'name',
+    'Historical automation'
+  ),
+  CASE
+    WHEN (grant."ruleSnapshot"->>'priority') ~ '^[0-9]+$'
+      THEN (grant."ruleSnapshot"->>'priority')::INTEGER
+    ELSE NULL
+  END,
+  COALESCE(grant."ruleSnapshot"->>'trigger', 'ORDER_FULFILLED'),
+  CASE grant."status"::TEXT
+    WHEN 'ISSUED' THEN 'ISSUED'
+    WHEN 'REVERSED' THEN 'ISSUED'
+    WHEN 'PARTIALLY_REVERSED' THEN 'ISSUED'
+    WHEN 'FAILED' THEN 'FAILED'
+    WHEN 'REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED'
+    ELSE 'PROCESSING'
+  END,
+  'LEGACY_GRANT_BACKFILLED',
+  NULL,
+  NULL,
+  NULL,
+  grant."ruleSnapshot"->>'rewardBase',
+  grant."rewardBaseAmount",
+  grant."amount",
+  grant."currencyCode",
+  grant."id",
+  CASE
+    WHEN grant."status"::TEXT IN ('ISSUED', 'REVERSED', 'PARTIALLY_REVERSED')
+      THEN grant."amount"
+    ELSE NULL
+  END,
+  1,
+  NULL,
+  grant."createdAt",
+  CASE
+    WHEN grant."status"::TEXT IN ('ISSUED', 'REVERSED', 'PARTIALLY_REVERSED', 'FAILED', 'REVIEW_REQUIRED')
+      THEN COALESCE(grant."issuedAt", grant."updatedAt")
+    ELSE NULL
+  END,
+  grant."createdAt",
+  grant."updatedAt"
+FROM "CreditGrant" AS grant
+ON CONFLICT ("executionKey") DO NOTHING;
