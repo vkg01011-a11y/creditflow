@@ -5,6 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { getBillingStatus, getPlanSelectionUrl } from "../services/billing.server";
 
 type ActionResponse = {
   success?: boolean;
@@ -115,8 +116,10 @@ function serializeSettings(settings: Awaited<ReturnType<typeof db.emailNotificat
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
+  let billing = null;
+  try { billing = await getBillingStatus(admin, shop); } catch { /* Paid features remain disabled when billing cannot be verified. */ }
 
   const stored = await db.emailNotificationSettings.upsert({
     where: { shop },
@@ -130,6 +133,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     emailProviderConfigured: Boolean(
       process.env.RESEND_API_KEY && process.env.CREDITFLOW_EMAIL_FROM,
     ),
+    customEmailEntitled: Boolean(billing?.emailEntitled),
+    currentPlanName: billing?.planName ?? "Billing status unavailable",
+    billingUrl: getPlanSelectionUrl(shop),
   };
 };
 
@@ -138,7 +144,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
 
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
   const form = await request.formData();
 
@@ -168,6 +174,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const accentColor = String(form.get("accentColor") ?? "");
     if (!/^#[0-9a-f]{6}$/i.test(accentColor)) {
       throw new Error("Choose a valid six-digit brand colour.");
+    }
+
+    if (issuedEmailMode === "CREDITFLOW_CUSTOM" || expiryReminderEnabled) {
+      const billing = await getBillingStatus(admin, shop, true);
+      if (!billing.emailEntitled) {
+        throw new Error("CreditFlow-branded emails and expiry reminders require the Professional ($19/month) or Business ($49/month) plan. Choose a plan in Plan & usage.");
+      }
     }
 
     const data = {
@@ -348,6 +361,14 @@ export default function NotificationsPage() {
         {error ? <div className="cfe-alert cfe-alert--error">{error}</div> : null}
         {success ? <div className="cfe-alert cfe-alert--success">{success}</div> : null}
 
+        {!data.customEmailEntitled ? (
+          <div className="cfe-notice">
+            <strong>Premium email features are locked on {data.currentPlanName}.</strong>
+            <span> CreditFlow-branded issue emails and expiry reminders are included with Professional ($19/month) and Business ($49/month).</span>
+            {" "}<a href={data.billingUrl} target="_top" rel="noreferrer">View plans</a>
+          </div>
+        ) : null}
+
         <fetcher.Form method="post">
           <div className="cfe-grid">
             <div className="cfe-card">
@@ -374,6 +395,7 @@ export default function NotificationsPage() {
                     type="radio"
                     name="issuedEmailMode"
                     value="CREDITFLOW_CUSTOM"
+                    disabled={!data.customEmailEntitled}
                     checked={settings.issuedEmailMode === "CREDITFLOW_CUSTOM"}
                     onChange={() => update("issuedEmailMode", "CREDITFLOW_CUSTOM")}
                   />
@@ -420,6 +442,7 @@ export default function NotificationsPage() {
                   type="checkbox"
                   name="expiryReminderEnabled"
                   value="true"
+                  disabled={!data.customEmailEntitled}
                   checked={settings.expiryReminderEnabled}
                   onChange={(e) => update("expiryReminderEnabled", e.currentTarget.checked)}
                 />
@@ -433,6 +456,7 @@ export default function NotificationsPage() {
                       type="checkbox"
                       name="expiryReminderDays"
                       value={String(day)}
+                      disabled={!data.customEmailEntitled}
                       checked={settings.expiryReminderDays.includes(day)}
                       onChange={(e) => {
                         const next = e.currentTarget.checked

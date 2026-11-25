@@ -136,6 +136,27 @@ At minimum, alert on:
 
 Keep customer personal data and access tokens out of application logs. Restrict access to database backups, privacy exports, and operational dashboards.
 
-## 9. Launch model
+## 9. Shopify App Pricing setup
 
-The current launch direction is a free core app. Do not add a billing gate to the initial release. Optional Pikmora services and qualified merchant referrals are separate channels and must not change the source-of-truth or money-moving rules inside CreditFlow.
+Create four monthly public plans in the Shopify Partner Dashboard. Recurring item handles must match exactly so the Partner API plan lookup can resolve them:
+
+| Plan | Recurring handle | Monthly | Included orders | Meter |
+|---|---|---:|---:|---|
+| Starter | `starter_plan` | $0 | 100 | `orders_processed` at $0.10/order after allowance |
+| Growth | `growth_plan` | $9 | 300 | `orders_processed` at $0.10/order after allowance |
+| Professional | `professional_plan` | $19 | 1,000 | `orders_processed` at $0.10/order after allowance |
+| Business | `business_plan` | $49 | Unlimited | No meter and no overage |
+
+Set 14 free-trial days on Growth, Professional, and Business. Starter is free forever and has no trial. The meter handle is case-sensitive: `orders_processed`. Business must not include this meter.
+
+Add these as private hosting secrets/configuration: `SHOPIFY_PARTNER_ORG_ID`, `SHOPIFY_PARTNER_API_ACCESS_TOKEN` (Partner API client needs Manage apps permission), and `SHOPIFY_APP_GID`. Optional version overrides are `SHOPIFY_PARTNER_API_VERSION` and `SHOPIFY_APP_EVENTS_API_VERSION` (defaults `2026-10`); set `SHOPIFY_APP_HANDLE` if the plan URL handle differs from `creditflow`. The App Events API uses existing `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`. Never commit credentials.
+
+Test only with a development store in the same Partner organization using no-charge plans. Verify each plan handle, trial duration, included meter allowance, and $0.10 event price. A 202 Accepted response confirms receipt only; inspect Dev Dashboard App Billing Event logs for asynchronous billing validation. Never use production stores for paid testing.
+
+Usage is one distinct fully fulfilled order that CreditFlow evaluates after customer and currency validation, regardless of whether a reward is issued. Duplicate webhook deliveries and worker retries do not add usage. Refunds do not remove usage. Trial, Business, and shops without an active plan selection do not emit overage events.
+
+Core rewards, Shopify-native Store Credit, refund safety, and privacy features remain available on Starter. Branded emails and expiry reminders require Professional or Business and the delivery worker rechecks entitlement.
+
+## 10. Launch model
+
+Shopify App Pricing manages subscription and usage billing; do not use the legacy Billing API or create charges directly from app code. Production billing stays inactive until Partner Dashboard plans and production secrets are configured, dev-store testing passes, and release gates are complete.

@@ -372,6 +372,9 @@ export async function processCreditEmailNotification({
   admin: ShopifyAdmin;
   notification: NotificationLike;
 }): Promise<{ status: "SENT" | "SKIPPED"; providerMessageId?: string }> {
+  const billing = await getBillingStatus(admin, notification.shop);
+  if (!billing.emailEntitled) return { status: "SKIPPED" };
+
   const settings = await db.emailNotificationSettings.findUnique({
     where: { shop: notification.shop },
   });

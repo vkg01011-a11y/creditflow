@@ -6,6 +6,7 @@ import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { MAX_WEBHOOK_ATTEMPTS, getWebhookRetryDelayMs } from "../domain/webhook-retry.mjs";
 import { processFulfilledOrder } from "../services/fulfillment-reward.server";
+import { reserveOrderUsageEvent, deliverOrderUsageEvent } from "../services/billing.server";
 import type { ShopifyFulfilledOrder } from "../services/fulfillment-reward.server";
 import { buildAutomationExecutionKey } from "../domain/automation-execution.mjs";
 import { processRefund, type NormalizedRefundPayload } from "../services/refund-reversal.server";
@@ -51,7 +52,20 @@ type NotificationJob = {
   attemptCount: number;
 };
 
+type BillingUsageJob = {
+  id: string;
+  shop: string;
+  orderGid: string;
+  idempotencyKey: string;
+  occurredAt: Date;
+  attemptCount: number;
+};
+
 type Counts = {
+  billingUsageSent: number;
+  billingUsageSkipped: number;
+  billingUsageRetryPending: number;
+  billingUsageReviewRequired: number;
   webhooksProcessed: number;
   webhooksRetryPending: number;
   webhooksReviewRequired: number;
@@ -111,6 +125,63 @@ async function claimWebhookJobs(limit: number, workerId: string) {
   ].join("\n");
 
   return db.$queryRawUnsafe<WebhookJob[]>(sql, limit, workerId);
+}
+
+async function claimBillingUsageJobs(limit: number, workerId: string) {
+  const sql = [
+    'WITH picked AS (',
+    '  SELECT "id"',
+    '  FROM "BillingUsageEvent"',
+    '  WHERE ("status" = \'QUEUED\'::"BillingUsageEventStatus" AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= NOW()))',
+    '     OR ("status" = \'PROCESSING\'::"BillingUsageEventStatus" AND ("lockedAt" IS NULL OR "lockedAt" <= NOW() - INTERVAL \'15 minutes\'))',
+    '  ORDER BY "occurredAt" ASC',
+    '  LIMIT $1',
+    '  FOR UPDATE SKIP LOCKED',
+    ')',
+    'UPDATE "BillingUsageEvent" AS event',
+    'SET "status" = \'PROCESSING\'::"BillingUsageEventStatus",',
+    '    "attemptCount" = event."attemptCount" + 1,',
+    '    "lockedAt" = NOW(), "lockedBy" = $2, "nextAttemptAt" = NULL, "lastError" = NULL, "updatedAt" = NOW()',
+    'FROM picked WHERE event."id" = picked."id"',
+    'RETURNING event."id", event."shop", event."orderGid", event."idempotencyKey", event."occurredAt", event."attemptCount"',
+  ].join("\n");
+  return db.$queryRawUnsafe<BillingUsageJob[]>(sql, limit, workerId);
+}
+
+async function processBillingUsageJob(job: BillingUsageJob, workerId: string, counts: Counts) {
+  try {
+    const { admin } = await unauthenticated.admin(job.shop);
+    const result = await deliverOrderUsageEvent({
+      admin, shop: job.shop, orderGid: job.orderGid,
+      idempotencyKey: job.idempotencyKey, occurredAt: job.occurredAt,
+    });
+    const saved = await db.billingUsageEvent.updateMany({
+      where: { id: job.id, status: "PROCESSING", lockedBy: workerId },
+      data: {
+        status: result, sentAt: result === "SENT" ? new Date() : null,
+        lockedAt: null, lockedBy: null,
+        lastError: result === "REVIEW_REQUIRED" ? "Order usage event is outside the active billable plan/cycle or has an unsupported plan handle. Reconcile against Shopify App Pricing before manual action." : null,
+      },
+    });
+    if (saved.count === 0) return;
+    if (result === "SENT") counts.billingUsageSent += 1;
+    else if (result === "SKIPPED") counts.billingUsageSkipped += 1;
+    else counts.billingUsageReviewRequired += 1;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown billing usage error";
+    const terminal = job.attemptCount >= MAX_WEBHOOK_ATTEMPTS;
+    await db.billingUsageEvent.updateMany({
+      where: { id: job.id, status: "PROCESSING", lockedBy: workerId },
+      data: {
+        status: terminal ? "REVIEW_REQUIRED" : "QUEUED",
+        nextAttemptAt: terminal ? null : new Date(Date.now() + getWebhookRetryDelayMs(job.attemptCount)),
+        lockedAt: null, lockedBy: null, lastError: message.slice(0, 2000),
+      },
+    });
+    if (terminal) counts.billingUsageReviewRequired += 1;
+    else counts.billingUsageRetryPending += 1;
+    console.error("[CreditFlow] App usage event delivery failed", { billingUsageEventId: job.id, shop: job.shop, errorName: error instanceof Error ? error.name : "UnknownError" });
+  }
 }
 
 async function claimPrivacyJobs(limit: number, workerId: string) {
@@ -440,6 +511,15 @@ async function processWebhookJob(
     return;
   }
 
+  // One event is reserved per fully fulfilled order that can be evaluated.
+  // The unique shop/order constraint makes duplicate deliveries and retries free.
+  if (
+    order.fulfillment_status === "fulfilled" &&
+    order.customer?.admin_graphql_api_id &&
+    /^[A-Z]{3}$/.test(String(order.currency ?? "").toUpperCase())
+  ) {
+    await reserveOrderUsageEvent(db, job.shop, orderGid);
+  }
   const existingGrant = await db.creditGrant.findFirst({
     where: { shop: job.shop, orderGid },
     orderBy: { createdAt: "desc" },
@@ -715,9 +795,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }),
     ]);
 
-    const [webhookJobs, privacyJobs] = await Promise.all([
+    const [webhookJobs, privacyJobs, billingUsageJobs] = await Promise.all([
       claimWebhookJobs(limit, workerId),
       claimPrivacyJobs(limit, workerId),
+      claimBillingUsageJobs(limit, workerId),
     ]);
 
     // Include privacy jobs claimed in this cycle, closing the race where a
@@ -754,6 +835,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
 
     const counts: Counts = {
+    billingUsageSent: 0,
+    billingUsageSkipped: 0,
+    billingUsageRetryPending: 0,
+    billingUsageReviewRequired: 0,
     webhooksProcessed: 0,
     webhooksRetryPending: 0,
     webhooksReviewRequired: 0,
@@ -799,6 +884,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
+  for (const job of billingUsageJobs) {
+    if (!shopsBeingRedacted.has(job.shop)) {
+      await processBillingUsageJob(job, workerId, counts);
+    } else {
+      await db.billingUsageEvent.updateMany({
+        where: { id: job.id, status: "PROCESSING", lockedBy: workerId },
+        data: { status: "SKIPPED", lockedAt: null, lockedBy: null, lastError: "Shop redaction is pending; usage reporting was suppressed." },
+      });
+      counts.billingUsageSkipped += 1;
+    }
+  }
+
     await db.workerRun.update({
       where: { id: workerId },
       data: {
@@ -824,7 +921,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({
       success: true,
       workerId,
-      claimed: webhookJobs.length + privacyJobs.length + notificationJobs.length,
+      claimed: webhookJobs.length + privacyJobs.length + notificationJobs.length + billingUsageJobs.length,
       ...counts,
     });
   } catch (error) {

@@ -93,9 +93,26 @@ These checks were performed against the connected development store and local Po
 - [ ] Establish retention and deletion policies for webhook payloads, audit metadata, privacy exports, and financial records.
 - [ ] Define a rollback procedure that does not reverse or drop applied database migrations.
 
+## Shopify App Pricing implementation and configuration
+
+- [x] Add Partner API active-subscription lookup and plan-handle mapping.
+- [x] Add durable per-shop/per-order usage outbox with stable hashed idempotency keys.
+- [x] Add App Events API sender and trial / Business / billing-cycle guards.
+- [x] Add worker retries and review-required state for unresolved usage deliveries.
+- [x] Add the Plan & usage page and Shopify-hosted plan-selection link.
+- [x] Enforce branded-email entitlement in settings, reward issuance, and delivery worker.
+- [ ] Create public plans with recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, `business_plan`.
+- [ ] Configure `orders_processed` at $0.10/order with included quantities 100 / 300 / 1,000 for Starter / Growth / Professional; Business has no meter.
+- [ ] Set 14-day trials on Growth, Professional, and Business; Starter has no trial.
+- [ ] Configure Partner API client with Manage apps permission and set Partner ID/token, app GID, and app secrets in staging.
+- [ ] Verify subscription item handles and no-charge plan selection on a development store.
+- [ ] Verify duplicate fulfillment webhooks produce one usage row and one App Events idempotency key.
+- [ ] Verify trial usage is not submitted, Business sends no events, and events fall within the active billing cycle.
+- [ ] Inspect Dev Dashboard App Billing Event logs; HTTP 202 is receipt, not final billing validation.
+
 ## Commercial and Shopify App Store gates
 
-CreditFlow's current intended launch direction is a free core app, with optional external Pikmora implementation services and qualified merchant referrals as separate revenue channels. Do not add Shopify Billing to the initial release unless this strategy changes.
+CreditFlow uses Shopify App Pricing. Starter is $0/month with 100 evaluated orders then $0.10/order; Growth is $9/month with 300 then $0.10/order; Professional is $19/month with 1,000 then $0.10/order; Business is $49/month with unlimited orders and no overage. Growth, Professional, and Business have a 14-day trial; Starter is free forever. Branded email and expiry reminders are Professional/Business features.
 
 - [ ] Confirm the launch feature boundary and referral disclosures.
 - [ ] Verify Shopify API scopes are minimal and accurately described.

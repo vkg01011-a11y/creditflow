@@ -48,6 +48,7 @@ export default function App() {
         <s-link href="/app/setup">Setup</s-link>
         <s-link href="/app/automations">Rewards</s-link>
         <s-link href="/app/notifications">Emails</s-link>
+        <s-link href="/app/billing">Plan &amp; usage</s-link>
         <s-link href="/app/automation-history">Activity</s-link>
         <s-link href="/app/reversals">Refunds</s-link>
       </s-app-nav>

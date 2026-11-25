@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { CreditGrant, PrismaClient } from "@prisma/client";
 import type { authenticate } from "../shopify.server";
+import { getBillingStatus } from "./billing.server";
 
 import {
   calculateEligibleLineSubtotal,
@@ -552,7 +553,16 @@ export async function processFulfilledOrder({
       where: { shop },
       select: { issuedEmailMode: true },
     });
-    const issuedEmailMode = emailSettings?.issuedEmailMode ?? "SHOPIFY_NATIVE";
+    let issuedEmailMode = emailSettings?.issuedEmailMode ?? "SHOPIFY_NATIVE";
+    if (issuedEmailMode === "CREDITFLOW_CUSTOM") {
+      try {
+        const billing = await getBillingStatus(admin, shop);
+        if (!billing.emailEntitled) issuedEmailMode = "SHOPIFY_NATIVE";
+      } catch {
+        // Fail safe to Shopify-native delivery if entitlement cannot be verified.
+        issuedEmailMode = "SHOPIFY_NATIVE";
+      }
+    }
     const expiresAt = rule.expiryDays
       ? new Date(Date.now() + rule.expiryDays * 86400000).toISOString()
       : undefined;

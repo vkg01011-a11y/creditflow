@@ -206,3 +206,16 @@ This repository is not yet approved for live merchants or the Shopify App Store.
 The Render staging Blueprint is in [render.yaml](./render.yaml). Review the resources, region, service names, and branch before creating the Blueprint in Render. It is configured for the feature branch; creating the Blueprint provisions billable resources.
 
 See [PRODUCT-READINESS.md](./PRODUCT-READINESS.md), [RELIABILITY-OPERATIONS.md](./RELIABILITY-OPERATIONS.md), and [PREPRODUCTION-RUNBOOK.md](./PREPRODUCTION-RUNBOOK.md) for the release checklist and operating procedures.
+
+
+## Pricing and Shopify App Pricing
+
+CreditFlow's current plans are Starter $0/month with 100 evaluated orders then $0.10 per additional order; Growth $9/month with 300 included then $0.10/order; Professional $19/month with 1,000 included then $0.10/order; and Business $49/month with unlimited orders and no overage. Growth, Professional, and Business have 14-day trials. Starter is free forever with no trial. Prices are USD/month.
+
+Shopify Partner Dashboard must define the recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, and `business_plan`. Configure the `orders_processed` meter at $0.10/order with included quantities 100/300/1,000 for Starter/Growth/Professional. Do not configure a meter on Business. The three paid plans each have a 14-day trial. These Partner Dashboard values are not created by application code.
+
+Set private environment values `SHOPIFY_PARTNER_ORG_ID`, `SHOPIFY_PARTNER_API_ACCESS_TOKEN` (Manage apps permission), `SHOPIFY_APP_GID`, `SHOPIFY_PARTNER_API_VERSION` (default `2026-10`), `SHOPIFY_APP_EVENTS_API_VERSION` (default `2026-10`), and `SHOPIFY_APP_HANDLE` (default `creditflow`). Existing `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` are used for App Events token exchange. Do not commit these secrets.
+
+One usage unit is reserved once per distinct, fully fulfilled Shopify order that CreditFlow evaluates with customer and currency fields present, even when no reward rule matches or credit is issued. Duplicate webhook deliveries and retries do not add a unit. Refunds do not erase an evaluated order. Trial, Business, and no-active-plan orders are not sent as billable events. App Events payloads contain only the shop ID, timestamp, hashed idempotency key, meter handle, and quantity; no customer or order details. A successful HTTP 202 confirms event receipt, not final billing validation; inspect the Dev Dashboard App Billing Event logs.
+
+Core rewards, Store Credit accuracy, refund safety, and privacy workflows remain available on Starter. CreditFlow-branded emails and expiry reminders require Professional or Business and are checked again at delivery time.
