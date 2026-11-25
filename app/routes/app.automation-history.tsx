@@ -33,14 +33,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ];
   }
 
-  const cursorOptions = cursor ? { cursor: { id: cursor }, skip: 1 } : {};
+  const executionQuery: Prisma.AutomationExecutionFindManyArgs = {
+    where,
+    orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }],
+    take: PAGE_SIZE + 1,
+  };
+  if (cursor) {
+    executionQuery.cursor = { id: cursor };
+    executionQuery.skip = 1;
+  }
+
   const [rowsWithLookahead, groups, totalCount, rules] = await Promise.all([
-    db.automationExecution.findMany({
-      where,
-      orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }],
-      take: PAGE_SIZE + 1,
-      ...cursorOptions,
-    }),
+    db.automationExecution.findMany(executionQuery),
     db.automationExecution.groupBy({
       by: ["status"],
       where,
