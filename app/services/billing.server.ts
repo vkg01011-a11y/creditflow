@@ -1,6 +1,11 @@
-import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { authenticate } from "../shopify.server";
+import {
+  buildBillingUsageIdempotencyKey,
+  buildUnverifiedBillingUsageReservation,
+  evaluateUsageEventDelivery,
+  isActiveBillingTrial,
+} from "../domain/billing-policy.mjs";
 
 type ShopifyAdmin = NonNullable<Awaited<ReturnType<typeof authenticate.admin>>["admin"]>;
 type PartnerSubscription = {
@@ -31,7 +36,9 @@ export type BillingStatus = {
 
 const PLAN_BY_HANDLE = Object.fromEntries(Object.entries(BILLING_PLANS).map(([key, plan]) => [plan.handle, key])) as Record<string, BillingPlanKey>;
 const cache = new Map<string, { expiresAt: number; value: BillingStatus }>();
+const statusRequests = new Map<string, Promise<BillingStatus>>();
 const CACHE_TTL_MS = 45_000;
+const BILLING_REQUEST_TIMEOUT_MS = 10_000;
 const SHOP_ID_QUERY = "query CreditFlowShopId { shop { id } }";
 const ACTIVE_SUBSCRIPTION_QUERY = "query CreditFlowActiveSubscription($appId: ID!, $shopId: ID!) { activeSubscription(appId: $appId, shopId: $shopId) { trialEndsAt cancelAtEndOfCycle currentBillingCycle { startTime endTime } items { handle usage { quantity cost { amount currencyCode } } } } }";
 
@@ -46,9 +53,7 @@ async function checkedJson<T>(response: Response, label: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceRefresh = false): Promise<BillingStatus> {
-  const cached = cache.get(shop);
-  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+async function loadBillingStatus(admin: ShopifyAdmin, shop: string): Promise<BillingStatus> {
   if (!isConfigured()) { const value = emptyStatus(false); cache.set(shop, { expiresAt: Date.now() + CACHE_TTL_MS, value }); return value; }
   const orgId = String(process.env.SHOPIFY_PARTNER_ID);
   if (!/^\d+$/.test(orgId)) throw new Error("SHOPIFY_PARTNER_ID must be the numeric Partner organization ID.");
@@ -60,6 +65,7 @@ export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceR
   const partnerResponse = await fetch("https://partners.shopify.com/" + orgId + "/api/" + apiVersion + "/graphql.json", {
     method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": String(process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN), "User-Agent": "CreditFlow/1.0" },
     body: JSON.stringify({ query: ACTIVE_SUBSCRIPTION_QUERY, variables: { appId: process.env.SHOPIFY_APP_GID, shopId: shopGid } }),
+    signal: AbortSignal.timeout(BILLING_REQUEST_TIMEOUT_MS),
   });
   const partnerBody = await checkedJson<PartnerResponse>(partnerResponse, "Shopify Partner API");
   if (partnerBody.errors?.length) throw new Error(partnerBody.errors.map((item) => item.message || "Partner API error").join("; "));
@@ -74,7 +80,7 @@ export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceR
   const cost = meter?.usage?.cost?.amount == null ? null : String(meter.usage.cost.amount);
   const cycleStart = subscription.currentBillingCycle?.startTime ?? null;
   const cycleEnd = subscription.currentBillingCycle?.endTime ?? null;
-  const isTrial = Boolean(subscription.trialEndsAt) || !cycleStart || !cycleEnd;
+  const isTrial = isActiveBillingTrial(subscription.trialEndsAt);
   const value: BillingStatus = {
     configured: true, active: true, plan: planKey ?? "unknown", planName: plan?.name ?? "Unrecognized plan",
     monthlyPrice: plan?.monthlyPrice ?? null, includedOrders: plan?.includedOrders ?? null, overageRate: plan?.overageRate ?? null,
@@ -88,6 +94,22 @@ export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceR
   return value;
 }
 
+export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceRefresh = false): Promise<BillingStatus> {
+  const cached = cache.get(shop);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const inFlight = statusRequests.get(shop);
+  if (inFlight) return inFlight;
+
+  const request = loadBillingStatus(admin, shop);
+  statusRequests.set(shop, request);
+  try {
+    return await request;
+  } finally {
+    if (statusRequests.get(shop) === request) statusRequests.delete(shop);
+  }
+}
+
 export function getPlanSelectionUrl(shop: string) {
   const storeHandle = shop.toLowerCase().replace(/\.myshopify\.com$/, "");
   const appHandle = (process.env.SHOPIFY_APP_HANDLE || "creditflow").toLowerCase();
@@ -96,40 +118,76 @@ export function getPlanSelectionUrl(shop: string) {
 }
 
 export async function reserveOrderUsageEvent(db: PrismaClient, shop: string, orderGid: string, planAtOccurrence: MeteredPlanKey, occurredAt: Date = new Date()) {
-  const idempotencyKey = createHash("sha256").update("creditflow:orders_processed:" + shop + ":" + orderGid).digest("hex");
+  const idempotencyKey = buildBillingUsageIdempotencyKey(shop, orderGid);
   await db.billingUsageEvent.upsert({ where: { shop_orderGid: { shop, orderGid } }, create: { shop, orderGid, planAtOccurrence, idempotencyKey, occurredAt }, update: {} });
 }
 
-let tokenCache: { value: string; expiresAt: number } | null = null;
-async function getAppEventsToken() {
-  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.value;
-  const response = await fetch("https://api.shopify.com/auth/access_token", {
-    method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "CreditFlow/1.0" },
-    body: JSON.stringify({ client_id: process.env.SHOPIFY_API_KEY, client_secret: process.env.SHOPIFY_API_SECRET, grant_type: "client_credentials" }),
+export async function reserveUnverifiedOrderUsageEvent(
+  db: PrismaClient,
+  shop: string,
+  orderGid: string,
+  occurredAt: Date,
+  reason = "STATUS_UNVERIFIED",
+) {
+  const reservation = buildUnverifiedBillingUsageReservation({ shop, orderGid, occurredAt, reason });
+  await db.billingUsageEvent.upsert({
+    where: { shop_orderGid: { shop, orderGid } },
+    create: reservation,
+    update: {},
   });
-  const body = await checkedJson<{ access_token?: string; expires_in?: number }>(response, "Shopify App Events token");
-  if (!body.access_token) throw new Error("Shopify did not return an App Events access token.");
-  tokenCache = { value: body.access_token, expiresAt: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000 };
-  return tokenCache.value;
 }
 
-export async function deliverOrderUsageEvent(args: { admin: ShopifyAdmin; shop: string; orderGid: string; planAtOccurrence: MeteredPlanKey; idempotencyKey: string; occurredAt: Date }): Promise<"SENT" | "SKIPPED" | "REVIEW_REQUIRED"> {
+let tokenCache: { value: string; expiresAt: number } | null = null;
+let tokenRequest: Promise<string> | null = null;
+async function getAppEventsToken() {
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) return tokenCache.value;
+  if (tokenRequest) return tokenRequest;
+
+  tokenRequest = (async () => {
+    const response = await fetch("https://api.shopify.com/auth/access_token", {
+      method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "CreditFlow/1.0" },
+      body: JSON.stringify({ client_id: process.env.SHOPIFY_API_KEY, client_secret: process.env.SHOPIFY_API_SECRET, grant_type: "client_credentials" }),
+      signal: AbortSignal.timeout(BILLING_REQUEST_TIMEOUT_MS),
+    });
+    const body = await checkedJson<{ access_token?: string; expires_in?: number }>(response, "Shopify App Events token");
+    if (!body.access_token) throw new Error("Shopify did not return an App Events access token.");
+    tokenCache = { value: body.access_token, expiresAt: Date.now() + Math.max(60, Number(body.expires_in ?? 3600)) * 1000 };
+    return tokenCache.value;
+  })();
+
+  try {
+    return await tokenRequest;
+  } finally {
+    tokenRequest = null;
+  }
+}
+
+export type BillingUsageDeliveryResult =
+  | { status: "SENT" }
+  | { status: "SKIPPED" }
+  | { status: "REVIEW_REQUIRED"; reason: string };
+
+export async function deliverOrderUsageEvent(args: { admin: ShopifyAdmin; shop: string; orderGid: string; planAtOccurrence: string; idempotencyKey: string; occurredAt: Date }): Promise<BillingUsageDeliveryResult> {
   const status = await getBillingStatus(args.admin, args.shop, true);
-  if (!status.active || status.isTrial || status.plan === "business") return "SKIPPED";
-  if (status.plan === "none" || status.plan === "unknown" || !status.shopGid || !status.cycleStart || !status.cycleEnd) return "REVIEW_REQUIRED";
-  if (status.plan !== args.planAtOccurrence) return "REVIEW_REQUIRED";
-  const start = new Date(status.cycleStart).getTime();
-  const end = new Date(status.cycleEnd).getTime();
-  const timestamp = args.occurredAt.getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || timestamp < start || timestamp > end) return "REVIEW_REQUIRED";
+  const eligibility = evaluateUsageEventDelivery({
+    status,
+    planAtOccurrence: args.planAtOccurrence,
+    occurredAt: args.occurredAt,
+  });
+  if (eligibility.kind === "REVIEW_REQUIRED") {
+    return { status: "REVIEW_REQUIRED", reason: eligibility.reason };
+  }
+  if (eligibility.kind !== "SEND") return { status: "SKIPPED" };
+
   const token = await getAppEventsToken();
   const apiVersion = process.env.SHOPIFY_APP_EVENTS_API_VERSION || "2026-10";
   const response = await fetch("https://api.shopify.com/app/" + apiVersion + "/events", {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, "User-Agent": "CreditFlow/1.0" },
-    body: JSON.stringify({ shop_id: status.shopGid, event_handle: "orders_processed", timestamp: args.occurredAt.toISOString(), idempotency_key: args.idempotencyKey, attributes: { value: 1 } }),
+    body: JSON.stringify({ shop_id: eligibility.shopGid, event_handle: "orders_processed", timestamp: eligibility.timestamp, idempotency_key: args.idempotencyKey, attributes: { value: 1 } }),
+    signal: AbortSignal.timeout(BILLING_REQUEST_TIMEOUT_MS),
   });
   let responseBody: { success?: boolean; error?: string } = {};
   try { responseBody = (await response.json()) as typeof responseBody; } catch { /* A successful response may have no JSON body. */ }
   if (!response.ok || responseBody.success === false) throw new Error("Shopify App Events returned HTTP " + response.status + ": " + (responseBody.error || "no error detail") + ".");
-  return "SENT";
+  return { status: "SENT" };
 }

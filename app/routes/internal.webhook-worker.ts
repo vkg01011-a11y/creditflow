@@ -6,7 +6,8 @@ import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { MAX_WEBHOOK_ATTEMPTS, getWebhookRetryDelayMs } from "../domain/webhook-retry.mjs";
 import { processFulfilledOrder } from "../services/fulfillment-reward.server";
-import { getBillingStatus, reserveOrderUsageEvent, deliverOrderUsageEvent, type MeteredPlanKey } from "../services/billing.server";
+import { getBillingStatus, reserveOrderUsageEvent, reserveUnverifiedOrderUsageEvent, deliverOrderUsageEvent } from "../services/billing.server";
+import { BILLING_REVIEW_MESSAGES, classifyUsageAtOccurrence, getBillingReviewMessage } from "../domain/billing-policy.mjs";
 import type { ShopifyFulfilledOrder } from "../services/fulfillment-reward.server";
 import { buildAutomationExecutionKey } from "../domain/automation-execution.mjs";
 import { processRefund, type NormalizedRefundPayload } from "../services/refund-reversal.server";
@@ -58,7 +59,7 @@ type BillingUsageJob = {
   id: string;
   shop: string;
   orderGid: string;
-  planAtOccurrence: MeteredPlanKey;
+  planAtOccurrence: string;
   idempotencyKey: string;
   occurredAt: Date;
   attemptCount: number;
@@ -162,24 +163,24 @@ async function processBillingUsageJob(job: BillingUsageJob, workerId: string, co
     const saved = await db.billingUsageEvent.updateMany({
       where: { id: job.id, status: "PROCESSING", lockedBy: workerId },
       data: {
-        status: result, sentAt: result === "SENT" ? new Date() : null,
+        status: result.status, sentAt: result.status === "SENT" ? new Date() : null,
         lockedAt: null, lockedBy: null,
-        lastError: result === "REVIEW_REQUIRED" ? "Order usage event is outside the active billable plan/cycle or has an unsupported plan handle. Reconcile against Shopify App Pricing before manual action." : null,
+        lastError: result.status === "REVIEW_REQUIRED" ? getBillingReviewMessage(result.reason) : null,
       },
     });
     if (saved.count === 0) return;
-    if (result === "SENT") counts.billingUsageSent += 1;
-    else if (result === "SKIPPED") counts.billingUsageSkipped += 1;
+    if (result.status === "SENT") counts.billingUsageSent += 1;
+    else if (result.status === "SKIPPED") counts.billingUsageSkipped += 1;
     else counts.billingUsageReviewRequired += 1;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown billing usage error";
     const terminal = job.attemptCount >= MAX_WEBHOOK_ATTEMPTS;
     await db.billingUsageEvent.updateMany({
       where: { id: job.id, status: "PROCESSING", lockedBy: workerId },
       data: {
         status: terminal ? "REVIEW_REQUIRED" : "QUEUED",
         nextAttemptAt: terminal ? null : new Date(Date.now() + getWebhookRetryDelayMs(job.attemptCount)),
-        lockedAt: null, lockedBy: null, lastError: message.slice(0, 2000),
+        lockedAt: null, lockedBy: null,
+        lastError: terminal ? BILLING_REVIEW_MESSAGES.DELIVERY_UNCERTAIN : BILLING_REVIEW_MESSAGES.TEMPORARY_FAILURE,
       },
     });
     if (terminal) counts.billingUsageReviewRequired += 1;
@@ -525,28 +526,37 @@ async function processWebhookJob(
   }
   const admin = adminContext.admin;
 
-  // Capture the plan active when the order is evaluated. Trial and Business
-  // orders never enter the billable outbox, preventing later plan changes from
-  // turning historically non-billable orders into charges.
+  // Reserve billable usage independently from reward processing. If the plan
+  // cannot be verified, persist a review item instead of losing the order or
+  // guessing that it is billable.
   if (
     order.fulfillment_status === "fulfilled" &&
     order.customer?.admin_graphql_api_id &&
     /^[A-Z]{3}$/.test(String(order.currency ?? "").toUpperCase())
   ) {
+    const usageOccurredAt = job.triggeredAt ?? job.receivedAt;
     try {
       const billing = await getBillingStatus(admin, job.shop);
-      if (
-        billing.active &&
-        !billing.isTrial &&
-        billing.plan !== "business" &&
-        billing.plan !== "none" &&
-        billing.plan !== "unknown"
-      ) {
-        await reserveOrderUsageEvent(db, job.shop, orderGid, billing.plan, job.triggeredAt ?? job.receivedAt);
+      const eligibility = classifyUsageAtOccurrence({
+        status: billing,
+        occurredAt: usageOccurredAt,
+      });
+      if (eligibility.kind === "QUEUE") {
+        await reserveOrderUsageEvent(db, job.shop, orderGid, eligibility.plan, usageOccurredAt);
+      } else if (eligibility.kind === "REVIEW_REQUIRED") {
+        await reserveUnverifiedOrderUsageEvent(db, job.shop, orderGid, usageOccurredAt, eligibility.reason);
       }
     } catch (error) {
-      // A billing API outage must not delay core Store Credit automation.
-      // Without a confirmed plan, this order is not automatically charged.
+      // Billing failures must not delay Store Credit automation. Preserve a
+      // durable review record so temporary outages cannot silently lose usage.
+      try {
+        await reserveUnverifiedOrderUsageEvent(db, job.shop, orderGid, usageOccurredAt);
+      } catch (reservationError) {
+        console.warn("[CreditFlow] Order usage review reservation failed", {
+          shop: job.shop,
+          errorName: reservationError instanceof Error ? reservationError.name : "UnknownError",
+        });
+      }
       console.warn("[CreditFlow] Order usage eligibility could not be verified", {
         shop: job.shop,
         errorName: error instanceof Error ? error.name : "UnknownError",

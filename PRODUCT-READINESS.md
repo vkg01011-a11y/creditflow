@@ -1,6 +1,6 @@
 # CreditFlow product-readiness checklist
 
-Updated: 2026-11-23
+Updated: 2026-11-26
 
 This is an engineering readiness tracker, not a claim that the app is approved for production or the Shopify App Store.
 
@@ -34,6 +34,11 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Resend delivery queue with retry and idempotency protection.
 - [x] Opt-in 7/3/1-day credit-expiry reminders, checked against Shopify's exact remaining credit transaction amount before delivery.
 - [x] Operations visibility for customer email queue states and failures.
+- [x] Operations visibility for Shopify usage billing queue states, without showing customer/order identifiers.
+- [x] Merchant billing page keeps Shopify-hosted plan management available and explains status outages in plain language.
+- [x] Durable `REVIEW_REQUIRED` reservation for fulfilled-order billing eligibility when the Partner API or cycle/plan data is uncertain.
+- [x] Plan/trial/cycle revalidation before App Events submission; pending plan changes require reconciliation.
+- [x] Stable billing idempotency key and bounded App Events/token/Partner API request timeouts.
 
 ## Verified development-store flows
 
@@ -51,9 +56,8 @@ These checks were performed against the connected development store and local Po
 ## Automated validation status
 
 - [x] Previous production-operations baseline passed clean PostgreSQL migration deployment, tests, TypeScript, ESLint, production build, and Docker image build.
-- [ ] Validate the customer-email schema/migration and email template tests on the current branch head.
 - [ ] Confirm TypeScript, ESLint, production build, Render Blueprint YAML validation, and Docker build for the current branch head.
-- [ ] Apply any CI-required fixes and confirm the final branch head is green.
+- [ ] Confirm the GitHub Actions checks are green for the pushed branch head.
 
 ## Remaining application reliability tests
 
@@ -99,12 +103,16 @@ These checks were performed against the connected development store and local Po
 - [x] Add durable per-shop/per-order usage outbox with stable hashed idempotency keys.
 - [x] Add App Events API sender and trial / Business / billing-cycle / plan-snapshot guards.
 - [x] Add worker retries and review-required state for unresolved usage deliveries.
+- [x] Add pure billing-policy tests for plan changes, cycle boundaries, trial status, and idempotency.
+- [x] Persist unknown billing eligibility as a review row without blocking rewards.
+- [x] Expose billing queue counts and review items in Operations and scheduled-worker logs.
 - [x] Add the Plan & usage page and Shopify-hosted plan-selection link.
 - [x] Enforce branded-email entitlement in settings, reward issuance, and delivery worker.
 - [ ] Create public plans with recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, `business_plan`.
 - [ ] Configure `orders_processed` as graduated pricing: 1–100 / 1–300 / 1–1,000 units at $0.00, then each additional unit at $0.10 on Starter / Growth / Professional; Business has no meter.
 - [ ] Set 14-day trials on Growth, Professional, and Business; Starter has no trial.
 - [ ] Configure Partner API client with Manage apps permission and set Partner ID/token, app GID, and app secrets in staging.
+- [ ] The linked development-store billing page reported an incomplete billing integration on 2026-11-26; configure secrets and verify plan selection before claiming live billing works.
 - [ ] Verify subscription item handles and no-charge plan selection on a development store.
 - [ ] Verify duplicate fulfillment webhooks produce one usage row and one App Events idempotency key.
 - [ ] Verify trial usage is not submitted, Business sends no events, and events fall within the active billing cycle.

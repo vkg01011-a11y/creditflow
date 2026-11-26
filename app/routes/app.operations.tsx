@@ -11,7 +11,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  const [webhookGroups, privacyGroups, webhookRows, privacyRows, workerRuns, notificationGroups, notificationRows] =
+  const [webhookGroups, privacyGroups, webhookRows, privacyRows, workerRuns, notificationGroups, notificationRows, billingUsageGroups, billingUsageRows] =
     await Promise.all([
       db.webhookEvent.groupBy({
         by: ["topic", "status"],
@@ -93,6 +93,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           providerMessageId: true,
         },
       }),
+      db.billingUsageEvent.groupBy({
+        by: ["status"],
+        where: { shop },
+        _count: { _all: true },
+      }),
+      db.billingUsageEvent.findMany({
+        where: {
+          shop,
+          status: { in: ["QUEUED", "PROCESSING", "REVIEW_REQUIRED"] },
+        },
+        orderBy: { occurredAt: "desc" },
+        take: 30,
+        select: {
+          id: true,
+          planAtOccurrence: true,
+          status: true,
+          attemptCount: true,
+          lastError: true,
+          occurredAt: true,
+          nextAttemptAt: true,
+        },
+      }),
     ]);
 
   const actionRequiredWebhooks = webhookGroups
@@ -103,6 +125,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     .reduce((sum, item) => sum + item._count._all, 0);
   const actionRequiredNotifications = notificationGroups
     .filter((item) => item.status === "FAILED")
+    .reduce((sum, item) => sum + item._count._all, 0);
+  const actionRequiredBillingUsage = billingUsageGroups
+    .filter((item) => item.status === "REVIEW_REQUIRED")
     .reduce((sum, item) => sum + item._count._all, 0);
 
 
@@ -124,6 +149,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       type: item.type,
       status: item.status,
       count: item._count._all,
+    })),
+    billingUsageGroups: billingUsageGroups.map((item) => ({
+      status: item.status,
+      count: item._count._all,
+    })),
+    billingUsageRows: billingUsageRows.map((item) => ({
+      ...item,
+      occurredAt: item.occurredAt.toISOString(),
+      nextAttemptAt: item.nextAttemptAt?.toISOString() ?? null,
     })),
     notificationRows: notificationRows.map((item) => ({
       ...item,
@@ -148,6 +182,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       webhookActionRequired: actionRequiredWebhooks,
       privacyActionRequired: actionRequiredPrivacy,
       notificationActionRequired: actionRequiredNotifications,
+      billingUsageTotal: billingUsageGroups.reduce((sum, item) => sum + item._count._all, 0),
+      billingUsageActionRequired: actionRequiredBillingUsage,
     },
     workerHeartbeatState,
     workerLastSeenAt: latestWorkerRun
@@ -192,7 +228,7 @@ export default function OperationsPage() {
   return (
     <s-page heading="System status">
       <div className="cfo-page">
-        <style>{".cfo-page{display:grid;gap:18px;padding:8px 0 36px;color:#202a26}.cfo-intro{color:#68736c;font-size:13px;line-height:1.6;margin:0;max-width:850px}.cfo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.cfo-card{background:#fff;border:1px solid #e3e8e5;border-radius:12px;padding:15px;min-width:0}.cfo-label{color:#78827b;font-size:11px}.cfo-value{font-size:25px;font-weight:700;margin-top:7px;font-variant-numeric:tabular-nums}.cfo-panel{background:#fff;border:1px solid #e3e8e5;border-radius:12px;overflow:hidden}.cfo-panel-head{padding:15px 17px;border-bottom:1px solid #edf0ed}.cfo-panel-title{font-size:14px;font-weight:700}.cfo-panel-sub{color:#78827b;font-size:11px;margin-top:4px}.cfo-pills{display:flex;flex-wrap:wrap;gap:8px;padding:13px 16px}.cfo-pill{border:1px solid #e5e9e6;border-radius:9px;padding:8px 10px;font-size:11px;background:#fafbfa}.cfo-pill strong{font-size:13px;margin-left:6px}.cfo-scroll{overflow-x:auto}.cfo-table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}.cfo-table th{text-align:left;background:#fafbfa;color:#78827b;text-transform:uppercase;letter-spacing:.05em;font-size:10px;padding:11px 14px}.cfo-table td{padding:12px 14px;border-top:1px solid #edf0ed;vertical-align:top}.cfo-status{display:inline-flex;border-radius:20px;padding:5px 8px;background:#eef2ef;color:#4d5e53;font-size:10px;font-weight:650;white-space:nowrap}.cfo-status--warning{background:#fff2d9;color:#7b5315}.cfo-status--success{background:#e8f3ec;color:#276342}.cfo-muted{color:#78827b;font-size:11px;margin-top:4px;line-height:1.5}.cfo-error{color:#8a4e32;font-size:11px;line-height:1.5;max-width:390px}.cfo-empty{padding:24px;text-align:center;color:#78827b;font-size:12px}.cfo-notice{border:1px solid #ecdcb8;background:#fffaf0;color:#674f20;border-radius:11px;padding:13px 15px;font-size:12px;line-height:1.6}.cfo-config{border:1px solid #e3e8e5;border-radius:11px;background:#fff;padding:14px 16px;font-size:12px;line-height:1.6}@media(max-width:850px){.cfo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}"}
+        <style>{".cfo-page{display:grid;gap:18px;padding:8px 0 36px;color:#202a26}.cfo-intro{color:#68736c;font-size:13px;line-height:1.6;margin:0;max-width:850px}.cfo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.cfo-card{background:#fff;border:1px solid #e3e8e5;border-radius:12px;padding:15px;min-width:0}.cfo-label{color:#78827b;font-size:11px}.cfo-value{font-size:25px;font-weight:700;margin-top:7px;font-variant-numeric:tabular-nums}.cfo-panel{background:#fff;border:1px solid #e3e8e5;border-radius:12px;overflow:hidden}.cfo-panel-head{padding:15px 17px;border-bottom:1px solid #edf0ed}.cfo-panel-title{font-size:14px;font-weight:700}.cfo-panel-sub{color:#78827b;font-size:11px;margin-top:4px}.cfo-pills{display:flex;flex-wrap:wrap;gap:8px;padding:13px 16px}.cfo-pill{border:1px solid #e5e9e6;border-radius:9px;padding:8px 10px;font-size:11px;background:#fafbfa}.cfo-pill strong{font-size:13px;margin-left:6px}.cfo-scroll{overflow-x:auto}.cfo-table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}.cfo-table th{text-align:left;background:#fafbfa;color:#78827b;text-transform:uppercase;letter-spacing:.05em;font-size:10px;padding:11px 14px}.cfo-table td{padding:12px 14px;border-top:1px solid #edf0ed;vertical-align:top}.cfo-status{display:inline-flex;border-radius:20px;padding:5px 8px;background:#eef2ef;color:#4d5e53;font-size:10px;font-weight:650;white-space:nowrap}.cfo-status--warning{background:#fff2d9;color:#7b5315}.cfo-status--success{background:#e8f3ec;color:#276342}.cfo-muted{color:#78827b;font-size:11px;margin-top:4px;line-height:1.5}.cfo-error{color:#8a4e32;font-size:11px;line-height:1.5;max-width:390px}.cfo-empty{padding:24px;text-align:center;color:#78827b;font-size:12px}.cfo-notice{border:1px solid #ecdcb8;background:#fffaf0;color:#674f20;border-radius:11px;padding:13px 15px;font-size:12px;line-height:1.6}.cfo-config{border:1px solid #e3e8e5;border-radius:11px;background:#fff;padding:14px 16px;font-size:12px;line-height:1.6}.cfo-link{color:#32513e;font-weight:650}@media(max-width:850px){.cfo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}"}
         </style>
         <p className="cfo-intro">
           Monitor durable webhook and privacy queues for this Shopify store.
@@ -225,6 +261,14 @@ export default function OperationsPage() {
             <div className="cfo-label">Email delivery failed</div>
             <div className="cfo-value">{data.totals.notificationActionRequired}</div>
           </article>
+          <article className="cfo-card">
+            <div className="cfo-label">Billing usage events</div>
+            <div className="cfo-value">{data.totals.billingUsageTotal}</div>
+          </article>
+          <article className="cfo-card">
+            <div className="cfo-label">Billing review required</div>
+            <div className="cfo-value">{data.totals.billingUsageActionRequired}</div>
+          </article>
         </section>
 
         <section className="cfo-config">
@@ -247,6 +291,56 @@ export default function OperationsPage() {
               ? `Last authenticated worker activity: ${formatDate(data.workerLastSeenAt)}`
               : "No authenticated worker invocation has been recorded yet."}
             {" "}The heartbeat becomes stale after three minutes without a new run.
+          </div>
+        </section>
+
+        <section className="cfo-panel">
+          <div className="cfo-panel-head">
+            <div className="cfo-panel-title">Shopify usage billing</div>
+            <div className="cfo-panel-sub">Per-order events sent to Shopify App Pricing · <a className="cfo-link" href="/app/billing">View plan and usage</a></div>
+          </div>
+          {data.totals.billingUsageActionRequired > 0 ? (
+            <div className="cfo-notice">
+              Review these events in Shopify Dev Dashboard → App Billing Events before taking action. CreditFlow does not automatically resend an event that needs review.
+            </div>
+          ) : null}
+          {data.billingUsageGroups.length === 0 ? (
+            <div className="cfo-empty">No usage events recorded for this store.</div>
+          ) : (
+            <div className="cfo-pills">
+              {data.billingUsageGroups.map((item) => (
+                <div className="cfo-pill" key={item.status}>
+                  {humanize(item.status)}<strong>{item.count}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.billingUsageRows.length === 0 ? (
+            <div className="cfo-empty">No usage events are waiting or need review.</div>
+          ) : (
+            <div className="cfo-scroll">
+              <table className="cfo-table">
+                <thead><tr><th>Plan at evaluation</th><th>Status</th><th>Attempts</th><th>Order evaluated</th><th>Next attempt / Detail</th></tr></thead>
+                <tbody>
+                  {data.billingUsageRows.map((item) => (
+                    <tr key={item.id}>
+                      <td>{humanize(item.planAtOccurrence)}</td>
+                      <td><span className={statusClass(item.status)}>{humanize(item.status)}</span></td>
+                      <td>{item.attemptCount}</td>
+                      <td>{formatDate(item.occurredAt)}</td>
+                      <td>
+                        {item.nextAttemptAt ? <div>{formatDate(item.nextAttemptAt)}</div> : null}
+                        {item.lastError ? <div className="cfo-error">{item.lastError}</div> : null}
+                        {!item.nextAttemptAt && !item.lastError ? "—" : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="cfo-muted" style={{ padding: "0 16px 14px" }}>
+            Order and customer identifiers are intentionally hidden. An accepted App Event still needs confirmation in Shopify billing logs.
           </div>
         </section>
 
