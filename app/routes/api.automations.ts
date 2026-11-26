@@ -40,9 +40,14 @@ type CleanCondition = {
 };
 
 type CleanConditionGroup = {
-  version: 1;
+  version: 1 | 2;
   logic: "AND" | "OR";
   rules: CleanCondition[];
+  groups?: Array<{
+    version: 1;
+    logic: "AND" | "OR";
+    rules: CleanCondition[];
+  }>;
 };
 
 function isObject(value: unknown): value is JsonObject {
@@ -249,6 +254,46 @@ function parseConditionGroup(value: unknown): CleanConditionGroup {
 
   if (logic !== "AND" && logic !== "OR") {
     throw new Error("Condition logic must be AND or OR.");
+  }
+
+  if ("groups" in value && !Array.isArray(value.groups)) {
+    throw new Error("conditions.groups must be an array.");
+  }
+
+  if (Array.isArray(value.groups)) {
+    if (value.groups.length < 1 || value.groups.length > 10) {
+      throw new Error("A rule must contain between 1 and 10 condition groups.");
+    }
+    const groups = value.groups.map((rawGroup, index) => {
+      if (!isObject(rawGroup)) {
+        throw new Error(`Condition group ${index + 1} is invalid.`);
+      }
+      if ("groups" in rawGroup) {
+        throw new Error("Nested condition groups are not supported.");
+      }
+      const parsedGroup = parseConditionGroup({
+        logic: rawGroup.logic,
+        rules: rawGroup.rules,
+      });
+      return {
+        version: 1 as const,
+        logic: parsedGroup.logic,
+        rules: parsedGroup.rules,
+      };
+    });
+    const totalConditions = groups.reduce((sum, group) => sum + group.rules.length, 0);
+    if (totalConditions > 20) {
+      throw new Error("A maximum of 20 conditions is supported per rule.");
+    }
+    if (groups.length > 1 && groups.some((group) => group.rules.length === 0)) {
+      throw new Error("Each condition group needs at least one condition.");
+    }
+    return {
+      version: 2,
+      logic,
+      rules: [],
+      groups,
+    };
   }
 
   const rawRules = value.rules ?? [];
@@ -874,7 +919,9 @@ export const action = async ({
           data: {
             shop,
             ...data,
-            enabled: body.enabled === true,
+            // Activation is a deliberate merchant action after reviewing the
+            // saved rule. Never trust a client-supplied enabled flag on create.
+            enabled: false,
           },
         });
 

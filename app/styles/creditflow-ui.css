@@ -1,15 +1,18 @@
-/* CreditFlow UI system — quiet surfaces, crisp type, clear hierarchy. */
+/* CreditFlow UI system — vibrant accents, calm surfaces, clear hierarchy. */
 :root {
   color-scheme: light;
-  --cf-ui-ink: #202923;
-  --cf-ui-muted: #748078;
-  --cf-ui-soft: #f6f8f6;
-  --cf-ui-line: #e5eae6;
-  --cf-ui-line-strong: #d8e0da;
-  --cf-ui-accent: #315b48;
-  --cf-ui-accent-soft: #edf3ef;
-  --cf-ui-radius: 12px;
-  --cf-ui-shadow: 0 1px 2px rgba(27, 39, 31, .035);
+  --cf-ui-ink: #25253d;
+  --cf-ui-muted: #6e7188;
+  --cf-ui-soft: #f5f4fc;
+  --cf-ui-line: #e5e3f0;
+  --cf-ui-line-strong: #d3d0e7;
+  --cf-ui-accent: #5946d2;
+  --cf-ui-accent-soft: #efedff;
+  --cf-ui-mint: #16865d;
+  --cf-ui-coral: #d85f51;
+  --cf-ui-amber: #9a6413;
+  --cf-ui-radius: 14px;
+  --cf-ui-shadow: 0 2px 8px rgba(57, 47, 125, .055);
 }
 
 html,
@@ -21,7 +24,7 @@ body {
 }
 
 body {
-  background: #f7f8f7;
+  background: #f7f6fc;
 }
 
 .cf-dashboard,
@@ -1198,4 +1201,216 @@ body {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* CreditFlow colour system — bright accents with calm, readable surfaces. */
+:root {
+  --cf-ui-mint: #16865d;
+  --cf-ui-coral: #d85f51;
+  --cf-ui-amber: #9a6413;
+}
+
+.cf-dashboard--refined .cf-overview-head {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  align-items: center;
+  padding: 23px 25px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 17px;
+  background: linear-gradient(118deg, #4035ae 0%, #5b4bd2 56%, #8060d8 100%);
+  box-shadow: 0 12px 28px rgba(70, 57, 164, .18);
+}
+
+.cf-dashboard--refined .cf-overview-head::after {
+  position: absolute;
+  z-index: -1;
+  top: -120px;
+  right: -70px;
+  width: 330px;
+  height: 330px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0) 69%);
+  content: "";
+  pointer-events: none;
+}
+
+.cf-dashboard--refined .cf-overview-head > * { position: relative; z-index: 1; }
+.cf-dashboard--refined .cf-overview-kicker { color: #e3e0ff; }
+.cf-dashboard--refined .cf-overview-kicker::before { background: #9de3c4; box-shadow: 0 0 0 4px rgba(157, 227, 196, .18); }
+.cf-dashboard--refined .cf-overview-title { color: #fff; }
+.cf-dashboard--refined .cf-overview-subtitle { color: #e9e7ff; }
+.cf-dashboard--refined .cf-overview-subtitle a { color: #fff; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, .45); text-underline-offset: 2px; }
+.cf-dashboard--refined .cf-period { border-color: rgba(255,255,255,.38); background: rgba(255,255,255,.13); color: #fff; backdrop-filter: blur(8px); }
+.cf-dashboard--refined .cf-primary-link { border-color: #fff; background: #fff; color: #4638b1; box-shadow: 0 3px 10px rgba(33, 27, 99, .18); }
+.cf-dashboard--refined .cf-primary-link:hover { border-color: #f2efff; background: #f2efff; color: #392b9f; }
+
+.cf-dashboard--refined .cf-stat-card {
+  position: relative;
+  overflow: hidden;
+  border-color: transparent;
+  border-radius: 13px;
+  box-shadow: 0 4px 12px rgba(57, 47, 125, .055);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.cf-dashboard--refined .cf-stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(57, 47, 125, .1); }
+.cf-dashboard--refined .cf-stat-card:nth-child(1) { border-top: 3px solid #35a979; background: linear-gradient(145deg, #eaf8f0, #f8fcf9 78%); }
+.cf-dashboard--refined .cf-stat-card:nth-child(2) { border-top: 3px solid #8474e8; background: linear-gradient(145deg, #f0eeff, #fbfaff 78%); }
+.cf-dashboard--refined .cf-stat-card:nth-child(3) { border-top: 3px solid #e6a63e; background: linear-gradient(145deg, #fff5e3, #fffdfa 78%); }
+.cf-dashboard--refined .cf-stat-card:nth-child(4) { border-top: 3px solid #e27b6c; background: linear-gradient(145deg, #fff0ed, #fffafa 78%); }
+.cf-dashboard--refined .cf-stat-indicator--credit { background: #26966b; box-shadow: 0 0 0 4px rgba(38, 150, 107, .12); }
+.cf-dashboard--refined .cf-stat-indicator--debit { background: #7869dc; box-shadow: 0 0 0 4px rgba(120, 105, 220, .12); }
+.cf-dashboard--refined .cf-stat-indicator--automation { background: #d8942f; box-shadow: 0 0 0 4px rgba(216, 148, 47, .13); }
+.cf-dashboard--refined .cf-stat-indicator--customer { background: #dc705f; box-shadow: 0 0 0 4px rgba(220, 112, 95, .12); }
+
+.cf-dashboard--refined .cf-panel { border-color: #e8e5f2; border-radius: 13px; box-shadow: 0 4px 14px rgba(57, 47, 125, .045); }
+.cf-dashboard--refined .cf-activity-track { background: #efedf7; }
+.cf-dashboard--refined .cf-activity-fill { background: linear-gradient(90deg, #19a676, #69c69d); }
+.cf-dashboard--refined .cf-activity-fill--debit { background: linear-gradient(90deg, #7562db, #a596f2); }
+.cf-dashboard--refined .cf-source-panel { border-color: #dedaf7; background: linear-gradient(145deg, #efedff, #faf9ff 78%); }
+.cf-dashboard--refined .cf-source-badge { border-color: #d8d2ff; background: #e9e6ff; color: #4b3db1; }
+.cf-dashboard--refined .cf-source-badge::before { background: #5e4bd4; }
+.cf-dashboard--refined .cf-source-foot { border-color: #e3e0f4; color: #6e6a91; }
+.cf-dashboard--refined .cf-transactions-head { border-color: #e9e6f2; }
+.cf-dashboard--refined .cf-table th { border-color: #e8e5f2; background: #f5f3ff; color: #716b98; }
+.cf-dashboard--refined .cf-table td { border-color: #f0eef7; }
+.cf-dashboard--refined .cf-table tbody tr:hover { background: #faf9ff; }
+.cf-dashboard--refined .cf-amount--credit { color: #16865d; }
+.cf-dashboard--refined .cf-amount--debit { color: #6754c8; }
+
+.cf-billing .cf-billing-hero,
+.cfs-page .cfs-hero,
+.cfa-page .cfa-head {
+  position: relative;
+  overflow: hidden;
+  padding: 22px 24px;
+  border: 1px solid #e1ddfa;
+  border-radius: 16px;
+  background: linear-gradient(120deg, #f0edff 0%, #f8f4ff 58%, #fff4f0 100%);
+}
+.cf-billing .cf-billing-kicker,
+.cfs-page .cfs-eyebrow,
+.cfa-page .cfa-kicker { color: #6455c3; }
+.cfs-page .cfs-step-number { border-color: #d6d0fa; background: #eae7ff; color: #4e3fbd; }
+.cfs-page .cfs-track-fill { background: linear-gradient(90deg, #5845d0, #917eea); }
+.cfa-page .cfa-info-mark { border-color: #d7d1f7; background: #eae7ff; color: #5544c6; }
+.cf-billing .cf-billing-title,
+.cfs-page .cfs-title,
+.cfa-page .cfa-title { color: #28234d; }
+.cf-billing .cf-billing-copy,
+.cfs-page .cfs-lead,
+.cfa-page .cfa-subtitle { color: #686985; }
+.cf-billing .cf-billing-button,
+.cfs-page .cfs-step-action,
+.cfa-page .cfa-button--primary,
+.cfe-page .cfe-save,
+.cfsim .cfsim-button { border-color: #5544c6; background: #5544c6; color: #fff; }
+.cf-billing .cf-billing-button:hover,
+.cfa-page .cfa-button--primary:hover,
+.cfe-page .cfe-save:hover,
+.cfsim .cfsim-button:hover { border-color: #4031a9; background: #4031a9; color: #fff; }
+
+.cf-billing .cf-billing-card,
+.cfs-page .cfs-panel,
+.cfa-page .cfa-stat,
+.cfe-page .cfe-card,
+.cfe-page .cfe-panel,
+.cfsim .cfsim-card,
+.cfo-page .cfo-card,
+.cfo-page .cfo-panel,
+.cfr-page .cfr-stat,
+.cfp-page .cfp-panel {
+  border-color: #e5e2f0;
+  box-shadow: 0 3px 12px rgba(57, 47, 125, .05);
+}
+
+.cf-billing .cf-billing-stat:nth-child(1),
+.cfa-page .cfa-stat:nth-child(1),
+.cfe-page .cfe-card:nth-child(1),
+.cfo-page .cfo-card:nth-child(1),
+.cfr-page .cfr-stat:nth-child(1) { border-color: #dcefe4; background: linear-gradient(145deg, #eff9f3, #fff); }
+.cf-billing .cf-billing-stat:nth-child(2),
+.cfa-page .cfa-stat:nth-child(2),
+.cfe-page .cfe-card:nth-child(2),
+.cfo-page .cfo-card:nth-child(2),
+.cfr-page .cfr-stat:nth-child(2) { border-color: #e1ddf8; background: linear-gradient(145deg, #f3f1ff, #fff); }
+.cf-billing .cf-billing-stat:nth-child(3),
+.cfa-page .cfa-stat:nth-child(3),
+.cfe-page .cfe-card:nth-child(3),
+.cfo-page .cfo-card:nth-child(3),
+.cfr-page .cfr-stat:nth-child(3) { border-color: #f2e5cb; background: linear-gradient(145deg, #fff8eb, #fff); }
+.cf-billing .cf-billing-stat:nth-child(4),
+.cfa-page .cfa-stat:nth-child(4),
+.cfe-page .cfe-card:nth-child(4),
+.cfo-page .cfo-card:nth-child(4),
+.cfr-page .cfr-stat:nth-child(4) { border-color: #f2dfdc; background: linear-gradient(145deg, #fff3f0, #fff); }
+.cf-billing .cf-billing-stat strong { color: #4436a8; }
+.cf-billing .cf-plan { border-color: #e3e0f0; background: #fff; box-shadow: 0 3px 10px rgba(57, 47, 125, .045); }
+.cf-billing .cf-plan:nth-child(2) { border-top: 3px solid #5946d2; background: linear-gradient(160deg, #f3f1ff, #fff 65%); }
+.cf-billing .cf-plan-price { color: #4f3dc1; }
+.cf-billing .cf-billing-note { border-color: #dfdcf5; background: #f4f2ff; color: #57557a; }
+
+.cfa-page .cfa-stat-value,
+.cfe-page .cfe-value,
+.cfo-page .cfo-value,
+.cfr-page .cfr-value { color: #4035a2; }
+.cfa-page .cfa-info,
+.cfe-page .cfe-notice,
+.cfsim .cfsim-note,
+.cfo-page .cfo-config,
+.cfp-page .cfp-privacy-note { border-color: #dfdcf4; background: #f4f2ff; color: #565577; }
+.cfa-page .cfa-tabs { border-color: #e4e1f2; background: #f1effa; }
+.cfa-page .cfa-tab[aria-pressed="true"] { color: #4436ad; }
+.cfa-page .cfa-status { border-color: #d9ede1; background: #edf8f1; color: #21764f; }
+.cfa-page .cfa-status--archived { border-color: #f0dcd8; background: #fff2ef; color: #a34f43; }
+.cfa-page .cfa-switch[aria-checked="true"] { border-color: #5946d2; background: #5946d2; }
+.cfe-page .cfe-preview { border-color: #e2def5; background: linear-gradient(145deg, #f3f1ff, #faf9ff); }
+.cfe-page .cfe-section-title { color: #6254c1; }
+.cfe-page input:focus,
+.cfe-page select:focus,
+.cfe-page textarea:focus,
+.cfa-page input:focus,
+.cfa-page select:focus,
+.cfa-page textarea:focus,
+.cfo-page input:focus,
+.cfo-page select:focus,
+.cfo-page textarea:focus,
+.cfsim input:focus,
+.cfsim select:focus { border-color: #796be0; outline-color: rgba(89, 70, 210, .22); }
+.cfo-page .cfo-status--success,
+.cfe-page .cfe-status--success,
+.cfp-page .cfp-status--completed { border-color: #d7ecdf; background: #eaf7ef; color: #21764f; }
+.cfo-page .cfo-status--warning,
+.cfr-page .cfr-review,
+.cfe-page .cfe-status--warning { border-color: #f0dfbd; background: #fff6e6; color: #8a5a12; }
+.cfr-page .cfr-reversed { border-color: #d7ecdf; background: #eaf7ef; color: #21764f; }
+.cfr-page .cfr-alert { border-color: #f0dfbd; background: #fff7e8; color: #805b1f; }
+.cfp-page .cfp-panel-title { color: #342c7c; }
+.cfp-page .cfp-table th { background: #f5f3ff; color: #716b98; }
+.cfp-page .cfp-export { border-color: #dcd7f3; color: #4f40bd; }
+.cfp-page .cfp-export:hover { border-color: #c9c1ed; background: #f4f2ff; }
+.cfsim .cfsim-reward { color: #4d3bc2; }
+
+.cf-dashboard--refined a:focus-visible,
+.cf-billing a:focus-visible,
+.cfa-page button:focus-visible,
+.cfe-page button:focus-visible,
+.cfo-page button:focus-visible,
+.cfs-page a:focus-visible,
+.cfsim button:focus-visible,
+.cfr-page a:focus-visible,
+.cfp-page a:focus-visible {
+  outline: 3px solid rgba(89, 70, 210, .35);
+  outline-offset: 3px;
+}
+
+@media (max-width: 620px) {
+  .cf-dashboard--refined .cf-overview-head,
+  .cf-billing .cf-billing-hero,
+  .cfs-page .cfs-hero,
+  .cfa-page .cfa-head { padding: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-dashboard--refined .cf-stat-card { transition: none; }
 }

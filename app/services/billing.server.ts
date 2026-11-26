@@ -6,6 +6,7 @@ import {
   evaluateUsageEventDelivery,
   isActiveBillingTrial,
 } from "../domain/billing-policy.mjs";
+import { buildShopifyPlanSelectionUrl } from "../domain/pricing-url.mjs";
 
 type ShopifyAdmin = NonNullable<Awaited<ReturnType<typeof authenticate.admin>>["admin"]>;
 type PartnerSubscription = {
@@ -111,10 +112,10 @@ export async function getBillingStatus(admin: ShopifyAdmin, shop: string, forceR
 }
 
 export function getPlanSelectionUrl(shop: string) {
-  const storeHandle = shop.toLowerCase().replace(/\.myshopify\.com$/, "");
-  const appHandle = (process.env.SHOPIFY_APP_HANDLE || "creditflow").toLowerCase();
-  if (!/^[a-z0-9-]+$/.test(storeHandle) || !/^[a-z0-9-]+$/.test(appHandle)) throw new Error("Unable to construct Shopify plan-selection URL.");
-  return "https://admin.shopify.com/store/" + storeHandle + "/charges/" + appHandle + "/pricing_plans";
+  return buildShopifyPlanSelectionUrl(
+    shop,
+    process.env.SHOPIFY_APP_HANDLE || "creditflow-1",
+  );
 }
 
 export async function reserveOrderUsageEvent(db: PrismaClient, shop: string, orderGid: string, planAtOccurrence: MeteredPlanKey, occurredAt: Date = new Date()) {

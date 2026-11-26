@@ -1,6 +1,6 @@
 # CreditFlow product-readiness checklist
 
-Updated: 2026-11-26
+Updated: 2026-11-27
 
 This is an engineering readiness tracker, not a claim that the app is approved for production or the Shopify App Store.
 
@@ -36,9 +36,17 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Operations visibility for customer email queue states and failures.
 - [x] Operations visibility for Shopify usage billing queue states, without showing customer/order identifiers.
 - [x] Merchant billing page keeps Shopify-hosted plan management available and explains status outages in plain language.
+- [x] Plan page shows trial countdown, included order allowance, usage returned by Shopify, cancellation-at-cycle-end status, and explains the overage model without presenting it as a final invoice.
 - [x] Durable `REVIEW_REQUIRED` reservation for fulfilled-order billing eligibility when the Partner API or cycle/plan data is uncertain.
 - [x] Plan/trial/cycle revalidation before App Events submission; pending plan changes require reconciliation.
 - [x] Stable billing idempotency key and bounded App Events/token/Partner API request timeouts.
+- [x] New automation rules start paused through both the merchant UI and create API, even if an API caller submits `enabled: true`.
+- [x] Editable reward templates and multiple condition groups with AND/OR logic.
+- [x] Branded email test send checks plan entitlement and provider configuration and describes provider acceptance accurately.
+- [x] Expiry scans use a persisted cursor, page-size limit, per-run work cap, and per-shop lease for crash recovery.
+- [x] Worker claims share a single invocation limit across webhook, privacy, notification and billing queues, with rotating remainder allocation.
+- [x] Merchant support form and configurable support-email link report when staging email settings are absent.
+- [x] Dashboard labels CreditFlow credit issuance and reversals separately and explains that current records do not establish native balance, redemption or expiry totals.
 
 ## Verified development-store flows
 
@@ -56,7 +64,9 @@ These checks were performed against the connected development store and local Po
 ## Automated validation status
 
 - [x] Previous production-operations baseline passed clean PostgreSQL migration deployment, tests, TypeScript, ESLint, production build, and Docker image build.
-- [ ] Confirm TypeScript, ESLint, production build, Render Blueprint YAML validation, and Docker build for the current branch head.
+- [x] Current working tree: Prisma schema validation, TypeScript, ESLint, production build, and Render Blueprint YAML parse passed; `npm test` passed 92 tests with the database integration test skipped.
+- [ ] Build the production Docker image (Docker CLI is unavailable in this development environment).
+- [ ] Run clean PostgreSQL migration deployment and the database integration test for the current branch head.
 - [ ] Confirm the GitHub Actions checks are green for the pushed branch head.
 
 ## Remaining application reliability tests
@@ -64,6 +74,7 @@ These checks were performed against the connected development store and local Po
 - [ ] Test refund-before-fulfillment worker ordering.
 - [ ] Test insufficient Store Credit, missing currency/product data, legacy grant, and worker interruption; verify manual-review state and no blind debit retry.
 - [ ] Test stale worker lease recovery and concurrent worker invocations.
+- [ ] Integration-test expiry-scan cursor continuation, crash recovery, and reset when reminder settings change.
 - [ ] Verify customer data request exports reversal and refund-event records.
 - [ ] Verify customer redaction removes/pseudonymizes customer-linked refund references.
 - [ ] Verify shop redaction removes shop-owned records and sessions.
@@ -73,8 +84,10 @@ These checks were performed against the connected development store and local Po
 
 - [x] Implement Shopify-native versus CreditFlow-branded issue email selection without sending both for one grant.
 - [x] Implement merchant email design controls and live preview.
+- [x] Implement a plan-gated test email send for the saved merchant design.
 - [x] Implement opt-in expiry reminders with Shopify remainingAmount verification and idempotent queued delivery.
 - [ ] Configure Resend API key and a verified sender domain in staging.
+- [ ] Configure a real `CREDITFLOW_SUPPORT_EMAIL` in staging; the environment template intentionally contains no support address.
 - [ ] Reauthorize the staging app with Store Credit account/transaction read scopes.
 - [ ] Send and review test credit-issued and expiry emails in a real inbox across desktop/mobile clients.
 - [ ] Verify suppression after the credit has been spent or expiry has been removed.

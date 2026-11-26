@@ -6,6 +6,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getBillingStatus, getPlanSelectionUrl } from "../services/billing.server";
+import { DEFAULT_ISSUED_MESSAGE, LEGACY_DEFAULT_ISSUED_MESSAGE } from "../domain/email-template.mjs";
 
 type ActionResponse = {
   success?: boolean;
@@ -43,7 +44,7 @@ const DEFAULT_SETTINGS: Settings = {
   accentColor: "#176B5B",
   issuedSubject: "A little something for your next order",
   issuedHeadline: "You've got store credit!",
-  issuedMessage: "Thank you for shopping with {{ shop_name }}. We've added {{ credit_amount }} to your store credit account.",
+  issuedMessage: DEFAULT_ISSUED_MESSAGE,
   issuedCtaLabel: "Shop now",
   expirySubject: "Your store credit is about to expire",
   expiryHeadline: "A little reminder before it expires",
@@ -105,7 +106,9 @@ function serializeSettings(settings: Awaited<ReturnType<typeof db.emailNotificat
     accentColor: settings.accentColor,
     issuedSubject: settings.issuedSubject,
     issuedHeadline: settings.issuedHeadline,
-    issuedMessage: settings.issuedMessage,
+    issuedMessage: settings.issuedMessage === LEGACY_DEFAULT_ISSUED_MESSAGE
+      ? DEFAULT_ISSUED_MESSAGE
+      : settings.issuedMessage,
     issuedCtaLabel: settings.issuedCtaLabel,
     expirySubject: settings.expirySubject,
     expiryHeadline: settings.expiryHeadline,
@@ -218,10 +221,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
+    const previousSettings = await db.emailNotificationSettings.findUnique({
+      where: { shop },
+      select: {
+        expiryReminderEnabled: true,
+        expiryReminderDays: true,
+      },
+    });
+    const previousReminderDays = Array.isArray(previousSettings?.expiryReminderDays)
+      ? previousSettings.expiryReminderDays.map(Number).filter((day) => [1, 3, 7].includes(day)).sort((a, b) => b - a)
+      : [7, 1];
+    const reminderScheduleChanged = previousSettings !== null && (
+      previousSettings.expiryReminderEnabled !== expiryReminderEnabled ||
+      JSON.stringify(previousReminderDays) !== JSON.stringify(expiryReminderDays)
+    );
+
     const saved = await db.emailNotificationSettings.upsert({
       where: { shop },
       create: { shop, ...data },
-      update: data,
+      update: {
+        ...data,
+        ...(reminderScheduleChanged
+          ? { lastExpiryScanAt: null, expiryScanInProgress: false, expiryScanCursor: null }
+          : {}),
+      },
     });
 
     return Response.json({
@@ -303,14 +326,22 @@ function MessageField({
 export default function NotificationsPage() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
+  const testFetcher = useFetcher<ActionResponse>();
   const [settings, setSettings] = useState<Settings>(data.settings ?? DEFAULT_SETTINGS);
   const [previewType, setPreviewType] = useState<"issued" | "expiry">("issued");
+  const [testType, setTestType] = useState<"issued" | "expiring">("issued");
+  const [testRecipient, setTestRecipient] = useState("");
+  const [previewSubmissionId, setPreviewSubmissionId] = useState("");
 
   useEffect(() => {
     if (fetcher.data?.settings) {
       setSettings(fetcher.data.settings);
     }
   }, [fetcher.data]);
+
+  useEffect(() => {
+    setPreviewSubmissionId(window.crypto.randomUUID());
+  }, [testFetcher.data]);
 
   const preview = useMemo(() => {
     const issued = previewType === "issued";
@@ -321,6 +352,7 @@ export default function NotificationsPage() {
       credit_amount: "₹250.00",
       remaining_amount: "₹180.00",
       expiry_date: "30 November 2026",
+      reward_reason: "your example order #1001",
     };
     return {
       subject: replacePreviewTokens(
@@ -520,6 +552,36 @@ export default function NotificationsPage() {
             </aside>
           </div>
         </fetcher.Form>
+
+        <section className="cfe-card">
+          <h2>Send yourself a test email</h2>
+          <p>Save your design first. The test uses sample values and goes only to the address you enter; it does not contact a customer or create store credit.</p>
+          {!data.customEmailEntitled ? (
+            <div className="cfe-notice">Test sending branded previews is available on Professional and Business plans. <a href={data.billingUrl}>Review plans in Shopify</a>.</div>
+          ) : null}
+          <testFetcher.Form method="post" action="/api/email-preview" className="cfe-fields">
+            <input type="hidden" name="submissionId" value={previewSubmissionId} />
+            <label className="cfe-field">
+              <span className="cfe-field-label">Test recipient</span>
+              <input type="email" name="recipient" value={testRecipient} maxLength={254} required onChange={(event) => setTestRecipient(event.currentTarget.value)} placeholder="you@example.com" />
+            </label>
+            <label className="cfe-field">
+              <span className="cfe-field-label">Preview email</span>
+              <select className="cfe-select" name="type" value={testType} onChange={(event) => setTestType(event.currentTarget.value as "issued" | "expiring")}>
+                <option value="issued">Credit issued</option>
+                <option value="expiring">Credit expiring</option>
+              </select>
+            </label>
+            <div className="cfe-field" style={{ gridColumn: "1 / -1" }}>
+              <button className="cfe-save" type="submit" disabled={!data.emailProviderConfigured || !data.customEmailEntitled || !previewSubmissionId || testFetcher.state !== "idle" || saving}>
+                {testFetcher.state !== "idle" ? "Sending preview…" : "Send test email"}
+              </button>
+            </div>
+          </testFetcher.Form>
+          {testFetcher.data?.error ? <div className="cfe-alert cfe-alert--error" role="alert">{testFetcher.data.error}</div> : null}
+          {testFetcher.data?.message ? <div className="cfe-alert cfe-alert--success" role="status">{testFetcher.data.message}</div> : null}
+          <div className="cfe-hint">A provider acceptance message means Resend accepted the request, not that it reached the inbox. The sending domain must be verified with Resend.</div>
+        </section>
       </div>
     </s-page>
   );

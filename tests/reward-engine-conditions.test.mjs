@@ -220,3 +220,63 @@ test("an empty condition group imposes no additional restriction", () => {
     true,
   );
 });
+
+test("supports AND conditions inside OR condition groups", () => {
+  const matched = matchesRuleConditions({
+    ...base,
+    conditions: {
+      version: 2,
+      logic: "OR",
+      groups: [
+        {
+          logic: "AND",
+          rules: [
+            { field: "ORDER_SUBTOTAL", operator: "GREATER_THAN", value: "20000" },
+            { field: "PAYMENT_STATUS", operator: "EQUALS", value: "COD" },
+          ],
+        },
+        {
+          logic: "AND",
+          rules: [
+            { field: "CUSTOMER_ORDER_COUNT", operator: "GREATER_THAN_OR_EQUAL", value: "5" },
+            { field: "CUSTOMER_TAG", operator: "CONTAINS", value: "VIP" },
+          ],
+        },
+      ],
+    },
+  });
+
+  assert.equal(matched, true);
+});
+
+test("requires every group when group matching is AND", () => {
+  const matched = matchesRuleConditions({
+    ...base,
+    conditions: {
+      version: 2,
+      logic: "AND",
+      groups: [
+        { logic: "AND", rules: [{ field: "ORDER_SUBTOTAL", operator: "GREATER_THAN", value: "5000" }] },
+        { logic: "OR", rules: [{ field: "PAYMENT_STATUS", operator: "EQUALS", value: "COD" }] },
+      ],
+    },
+  });
+
+  assert.equal(matched, false);
+});
+
+test("malformed empty alternative groups fail closed", () => {
+  const matched = matchesRuleConditions({
+    ...base,
+    conditions: {
+      version: 2,
+      logic: "OR",
+      groups: [
+        { logic: "AND", rules: [] },
+        { logic: "AND", rules: [{ field: "PAYMENT_STATUS", operator: "EQUALS", value: "PREPAID" }] },
+      ],
+    },
+  });
+
+  assert.equal(matched, false);
+});

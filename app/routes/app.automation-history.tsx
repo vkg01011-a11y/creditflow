@@ -166,6 +166,9 @@ export default function AutomationHistoryPage() {
           .cfe-page{display:grid;gap:17px;padding:8px 0 36px;color:#202a26;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
           .cfe-page *{box-sizing:border-box}
           .cfe-intro{margin:0;color:#6d7971;font-size:12px;line-height:1.6;max-width:900px}
+          .cfe-subnav{display:flex;flex-wrap:wrap;gap:8px}
+          .cfe-subnav a{display:inline-flex;align-items:center;min-height:32px;padding:0 10px;border:1px solid #e2e8e3;border-radius:7px;background:#fff;color:#425348;font-size:10px;font-weight:650;text-decoration:none}
+          .cfe-subnav a:hover{background:#f5f8f5;border-color:#cbd9cf}
           .cfe-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
           .cfe-card{background:#fff;border:1px solid #e2e8e3;border-radius:10px;padding:13px 15px;min-width:0}
           .cfe-label{color:#78827b;font-size:10px}
@@ -212,6 +215,12 @@ export default function AutomationHistoryPage() {
           Rules are evaluated by priority; the first eligible rule issues the reward, so lower-priority rules are not evaluated for that order.
           It does not control rules or change Shopify Store Credit balances.
         </p>
+
+        <nav className="cfe-subnav" aria-label="Store credit operations">
+          <a href="/app/reversals">Refund reversals</a>
+          <a href="/app/operations">Processing &amp; queues</a>
+          <a href="/app/privacy-requests">Privacy requests</a>
+        </nav>
 
         <section className="cfe-grid">
           <article className="cfe-card"><div className="cfe-label">Recorded evaluations</div><div className="cfe-value">{data.totalCount}</div></article>

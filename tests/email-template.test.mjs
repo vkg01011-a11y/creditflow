@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { renderCreditEmail } from "../app/domain/email-template.mjs";
+import { LEGACY_DEFAULT_ISSUED_MESSAGE, renderCreditEmail } from "../app/domain/email-template.mjs";
 
 const settings = {
   issuedSubject: "You earned {{ credit_amount }} at {{ shop_name }}",
@@ -74,6 +74,22 @@ test("renders expiry reminder values", () => {
   assert.equal(result.subject, "₹100 expires soon");
   assert.match(result.text, /Use ₹100 by 28 November 2026/);
   assert.match(result.html, /Spend credit/);
+});
+
+test("adds the fulfilled order as the reward reason while upgrading the legacy default template", () => {
+  const result = renderCreditEmail({
+    type: "issued",
+    settings: { issuedMessage: LEGACY_DEFAULT_ISSUED_MESSAGE },
+    data: {
+      shopName: "North Store",
+      creditAmount: "$25.00",
+      rewardReason: "order #CF-1042",
+      shopUrl: "https://north.example.com",
+    },
+  });
+
+  assert.match(result.text, /reward for order #CF-1042/);
+  assert.match(result.html, /reward for order #CF-1042/);
 });
 
 test("rejects unsupported email type and unsafe logo urls", () => {

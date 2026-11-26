@@ -17,16 +17,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const [
     creditAdded,
-    creditDeducted,
+    refundReversed,
     activeAutomations,
-    customerCountRows,
     recentRows,
     shopMetadata,
+    ordersEvaluated,
+    ordersRewarded,
+    failedAutomationCount,
+    webhookAttentionCount,
+    grantReviewCount,
+    reversalReviewCount,
+    privacyAttentionCount,
+    emailFailureCount,
+    billingReviewCount,
   ] = await Promise.all([
     db.creditLedgerEntry.aggregate({
       where: {
         shop,
         direction: "CREDIT",
+        transactionType: "CASHBACK_CREDIT",
         createdAt: { gte: thirtyDaysAgo },
       },
       _sum: { amount: true },
@@ -37,6 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       where: {
         shop,
         direction: "DEBIT",
+        transactionType: "REWARD_REVERSAL",
         createdAt: { gte: thirtyDaysAgo },
       },
       _sum: { amount: true },
@@ -44,16 +54,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
 
     db.automationRule.count({
-      where: { shop, enabled: true },
+      where: { shop, enabled: true, archivedAt: null },
     }),
-
-    // Count distinct customers in PostgreSQL without transferring every
-    // grouped customer row into the Node.js process.
-    db.$queryRaw<Array<{ customerCount: bigint }>>`
-      SELECT COUNT(DISTINCT "customerGid")::bigint AS "customerCount"
-      FROM "CreditLedgerEntry"
-      WHERE "shop" = ${shop}
-    `,
 
     db.creditLedgerEntry.findMany({
       where: { shop },
@@ -82,7 +84,38 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       `),
     ),
+    db.automationExecution.count({
+      where: { shop, evaluatedAt: { gte: thirtyDaysAgo } },
+    }),
+    db.automationExecution.count({
+      where: { shop, evaluatedAt: { gte: thirtyDaysAgo }, status: "ISSUED" },
+    }),
+    db.automationExecution.count({
+      where: { shop, status: { in: ["REVIEW_REQUIRED", "FAILED"] } },
+    }),
+    db.webhookEvent.count({
+      where: { shop, status: { in: ["FAILED", "REVIEW_REQUIRED"] } },
+    }),
+    db.creditGrant.count({
+      where: { shop, status: { in: ["FAILED", "REVIEW_REQUIRED"] } },
+    }),
+    db.creditReversal.count({
+      where: { shop, status: "REVIEW_REQUIRED" },
+    }),
+    db.privacyRequest.count({
+      where: { shop, status: { in: ["FAILED", "REVIEW_REQUIRED"] } },
+    }),
+    db.notification.count({
+      where: { shop, status: "FAILED" },
+    }),
+    db.billingUsageEvent.count({
+      where: { shop, status: "REVIEW_REQUIRED" },
+    }),
   ]);
+
+  const recordsNeedingAttention = failedAutomationCount + webhookAttentionCount +
+    grantReviewCount + reversalReviewCount + privacyAttentionCount +
+    emailFailureCount + billingReviewCount;
 
   return {
     storeName: shopMetadata.storeName,
@@ -91,14 +124,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     creditAdded: creditAdded._sum.amount?.toString() ?? "0",
     creditAddedCount: creditAdded._count._all,
 
-    creditDeducted: creditDeducted._sum.amount?.toString() ?? "0",
-    creditDeductedCount: creditDeducted._count._all,
+    refundReversed: refundReversed._sum.amount?.toString() ?? "0",
+    refundReversedCount: refundReversed._count._all,
+    ordersEvaluated,
+    ordersRewarded,
+    recordsNeedingAttention,
 
     activeAutomations,
-    customersWithActivity: Number(
-      customerCountRows[0]?.customerCount ?? 0,
-    ),
-
     recentTransactions: recentRows.map((entry) => ({
       id: entry.id,
       customerGid: entry.customerGid,
@@ -160,11 +192,11 @@ export default function Dashboard() {
   const data = useLoaderData<typeof loader>();
 
   const added = Number(data.creditAdded) || 0;
-  const deducted = Number(data.creditDeducted) || 0;
-  const maxActivity = Math.max(added, deducted, 1);
+  const reversed = Number(data.refundReversed) || 0;
+  const maxActivity = Math.max(added, reversed, 1);
 
   const addedWidth = added > 0 ? Math.max(3, (added / maxActivity) * 100) : 0;
-  const deductedWidth = deducted > 0 ? Math.max(3, (deducted / maxActivity) * 100) : 0;
+  const reversedWidth = reversed > 0 ? Math.max(3, (reversed / maxActivity) * 100) : 0;
 
   return (
     <s-page heading="CreditFlow">
@@ -278,7 +310,7 @@ export default function Dashboard() {
 
           .cf-stats {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 11px;
           }
 
@@ -616,25 +648,37 @@ export default function Dashboard() {
         <section className="cf-stats" aria-label="Store credit overview metrics">
           <article className="cf-stat-card">
             <div className="cf-stat-top">
-              <span className="cf-stat-label">Credits added</span>
+              <span className="cf-stat-label">Store credit issued</span>
               <span className="cf-stat-indicator cf-stat-indicator--credit" />
             </div>
             <div className="cf-stat-value">{formatMoney(data.creditAdded, data.currencyCode)}</div>
-            <div className="cf-stat-note">{data.creditAddedCount.toLocaleString()} ledger entries · last 30 days</div>
+            <div className="cf-stat-note">{data.creditAddedCount.toLocaleString()} reward grants · last 30 days</div>
           </article>
 
           <article className="cf-stat-card">
             <div className="cf-stat-top">
-              <span className="cf-stat-label">Credits deducted</span>
+              <span className="cf-stat-label">Refund reversals</span>
               <span className="cf-stat-indicator cf-stat-indicator--debit" />
             </div>
-            <div className="cf-stat-value">{formatMoney(data.creditDeducted, data.currencyCode)}</div>
-            <div className="cf-stat-note">{data.creditDeductedCount.toLocaleString()} ledger entries · last 30 days</div>
+            <div className="cf-stat-value">{formatMoney(data.refundReversed, data.currencyCode)}</div>
+            <div className="cf-stat-note">{data.refundReversedCount.toLocaleString()} reversal entries · last 30 days</div>
+          </article>
+
+          <article className="cf-stat-card">
+            <div className="cf-stat-top"><span className="cf-stat-label">Orders evaluated</span><span className="cf-stat-indicator cf-stat-indicator--automation" /></div>
+            <div className="cf-stat-value">{data.ordersEvaluated.toLocaleString()}</div>
+            <div className="cf-stat-note">Fulfilled orders checked · last 30 days</div>
+          </article>
+
+          <article className="cf-stat-card">
+            <div className="cf-stat-top"><span className="cf-stat-label">Orders rewarded</span><span className="cf-stat-indicator cf-stat-indicator--credit" /></div>
+            <div className="cf-stat-value">{data.ordersRewarded.toLocaleString()}</div>
+            <div className="cf-stat-note">Evaluations that issued Shopify Store Credit · last 30 days</div>
           </article>
 
           <article className="cf-stat-card">
             <div className="cf-stat-top">
-              <span className="cf-stat-label">Active automations</span>
+              <span className="cf-stat-label">Active reward rules</span>
               <span className="cf-stat-indicator cf-stat-indicator--automation" />
             </div>
             <div className="cf-stat-value">{data.activeAutomations.toLocaleString()}</div>
@@ -642,12 +686,9 @@ export default function Dashboard() {
           </article>
 
           <article className="cf-stat-card">
-            <div className="cf-stat-top">
-              <span className="cf-stat-label">Customers with activity</span>
-              <span className="cf-stat-indicator cf-stat-indicator--customer" />
-            </div>
-            <div className="cf-stat-value">{data.customersWithActivity.toLocaleString()}</div>
-            <div className="cf-stat-note">Distinct customers in the transaction ledger</div>
+            <div className="cf-stat-top"><span className="cf-stat-label">Records needing attention</span><span className="cf-stat-indicator cf-stat-indicator--customer" /></div>
+            <div className="cf-stat-value">{data.recordsNeedingAttention.toLocaleString()}</div>
+            <div className="cf-stat-note"><Link to="/app/operations">Review processing and failed jobs</Link></div>
           </article>
         </section>
 
@@ -656,14 +697,14 @@ export default function Dashboard() {
             <div className="cf-panel-head">
               <div>
                 <h2 className="cf-panel-title">Credit movement</h2>
-                <p className="cf-panel-description">Credits recorded versus credits deducted</p>
+                <p className="cf-panel-description">Reward credit recorded versus credit reversed for refunds</p>
               </div>
               <span className="cf-transactions-count">30-day view</span>
             </div>
 
             <div className="cf-activity-list">
               <div className="cf-activity-row">
-                <span className="cf-activity-label">Added</span>
+                <span className="cf-activity-label">Issued</span>
                 <div className="cf-activity-track" role="img" aria-label={`Credits added, relative amount ${addedWidth.toFixed(0)} percent`}>
                   <div className="cf-activity-fill" style={{ width: `${addedWidth}%` }} />
                 </div>
@@ -671,11 +712,11 @@ export default function Dashboard() {
               </div>
 
               <div className="cf-activity-row">
-                <span className="cf-activity-label">Deducted</span>
-                <div className="cf-activity-track" role="img" aria-label={`Credits deducted, relative amount ${deductedWidth.toFixed(0)} percent`}>
-                  <div className="cf-activity-fill cf-activity-fill--debit" style={{ width: `${deductedWidth}%` }} />
+                <span className="cf-activity-label">Reversed</span>
+                <div className="cf-activity-track" role="img" aria-label={`Refund reversals, relative amount ${reversedWidth.toFixed(0)} percent`}>
+                  <div className="cf-activity-fill cf-activity-fill--debit" style={{ width: `${reversedWidth}%` }} />
                 </div>
-                <span className="cf-activity-amount">{formatMoney(data.creditDeducted, data.currencyCode)}</span>
+                <span className="cf-activity-amount">{formatMoney(data.refundReversed, data.currencyCode)}</span>
               </div>
             </div>
           </article>
@@ -748,7 +789,7 @@ export default function Dashboard() {
         </section>
 
         <p className="cf-footnote">
-          Dashboard figures reflect CreditFlow ledger records. They are not the customers’ available Shopify store credit balances.
+          Issued and reversed totals reflect CreditFlow transaction records. They are not available balances. Redemption and expiry totals are not included because the current app records do not provide a complete Shopify transaction feed for those events. Queue attention counts are records and may refer to the same incident across more than one queue.
         </p>
       </div>
     </s-page>

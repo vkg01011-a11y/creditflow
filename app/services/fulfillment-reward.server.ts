@@ -197,16 +197,15 @@ function resolvePaymentStatus(order: ShopifyFulfilledOrder): PaymentStatus {
 }
 
 function hasCustomerConditions(conditions: unknown): boolean {
-  if (!isRecord(conditions) || !Array.isArray(conditions.rules)) {
-    return false;
-  }
-
-  return conditions.rules.some(
+  if (!isRecord(conditions)) return false;
+  const rules = Array.isArray(conditions.rules) ? conditions.rules : [];
+  const groups = Array.isArray(conditions.groups) ? conditions.groups : [];
+  return rules.some(
     (condition: unknown) =>
       isRecord(condition) &&
       typeof condition.field === "string" &&
       condition.field.startsWith("CUSTOMER_"),
-  );
+  ) || groups.some((group: unknown) => hasCustomerConditions(group));
 }
 
 async function loadCustomerConditionData(

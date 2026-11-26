@@ -21,6 +21,19 @@ type NotificationLike = {
   attemptCount: number;
 };
 
+type ExpiryScanGrant = {
+  id: string;
+  customerGid: string;
+  amount: { toString(): string };
+  currencyCode: string;
+  expiresAt: Date | null;
+  shopifyAccountGid: string | null;
+  shopifyTransactionGid: string | null;
+};
+
+const EXPIRY_SCAN_PAGE_SIZE = 500;
+const MAX_EXPIRY_SCAN_PAGES_PER_RUN = 2;
+
 type ShopifyNotificationContext = {
   errors?: Array<{ message?: string }>;
   data?: {
@@ -227,6 +240,7 @@ async function sendWithResend({
       text,
       ...(replyTo ? { reply_to: replyTo } : {}),
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   const payload = await response.json().catch(() => ({})) as {
@@ -245,12 +259,56 @@ async function sendWithResend({
   return payload.id;
 }
 
+export async function sendCreditEmailPreview({
+  shop,
+  shopName,
+  currencyCode,
+  settings,
+  recipient,
+  type,
+  submissionId,
+}: {
+  shop: string;
+  shopName: string;
+  currencyCode: string;
+  settings: Record<string, unknown>;
+  recipient: string;
+  type: "issued" | "expiring";
+  submissionId: string;
+}) {
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const email = renderCreditEmail({
+    type,
+    settings,
+    data: {
+      shopName,
+      customerFirstName: "Alex",
+      creditAmount: formatMoney("25", currencyCode),
+      remainingAmount: formatMoney("25", currencyCode),
+      expiryDate: formatExpiryDate(expiresAt.toISOString()),
+      shopUrl: "https://" + shop,
+      rewardReason: "your example order #1001",
+    },
+  });
+  const providerMessageId = await sendWithResend({
+    to: recipient,
+    from: senderAddress(shopName, typeof settings.senderName === "string" ? settings.senderName : null),
+    replyTo: typeof settings.replyToEmail === "string" ? settings.replyToEmail : null,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+    idempotencyKey: "creditflow-email-preview:" + shop + ":" + submissionId,
+  });
+  return { providerMessageId };
+}
+
 export async function queueExpiringCreditNotifications(
   db: PrismaClient,
   now = new Date(),
   excludedShops: string[] = [],
 ) {
   const scanThreshold = new Date(now.getTime() - 23 * 60 * 60 * 1000);
+  const staleScanThreshold = new Date(now.getTime() - 5 * 60 * 1000);
   const settingsRows = await db.emailNotificationSettings.findMany({
     where: {
       ...(excludedShops.length > 0 ? { shop: { notIn: excludedShops } } : {}),
@@ -258,10 +316,15 @@ export async function queueExpiringCreditNotifications(
       OR: [
         { lastExpiryScanAt: null },
         { lastExpiryScanAt: { lte: scanThreshold } },
+        { expiryScanCursor: { not: null }, expiryScanInProgress: false },
+        {
+          expiryScanInProgress: true,
+          lastExpiryScanAt: { lte: staleScanThreshold },
+        },
       ],
     },
     orderBy: { lastExpiryScanAt: "asc" },
-    take: 100,
+    take: 20,
   });
 
   let queued = 0;
@@ -272,9 +335,11 @@ export async function queueExpiringCreditNotifications(
       where: {
         id: settings.id,
         lastExpiryScanAt: settings.lastExpiryScanAt,
+        expiryScanCursor: settings.expiryScanCursor,
         expiryReminderEnabled: true,
+        expiryScanInProgress: settings.expiryScanInProgress,
       },
-      data: { lastExpiryScanAt: now },
+      data: { lastExpiryScanAt: now, expiryScanInProgress: true },
     });
     if (claimed.count === 0) continue;
 
@@ -288,71 +353,116 @@ export async function queueExpiringCreditNotifications(
           .filter((day) => Number.isInteger(day) && day >= 1 && day <= 30),
       )].sort((a, b) => a - b);
 
-      if (reminderDays.length === 0) continue;
+      if (reminderDays.length === 0) {
+        await db.emailNotificationSettings.updateMany({
+          where: { id: settings.id, lastExpiryScanAt: now, expiryScanInProgress: true },
+          data: { expiryScanInProgress: false, expiryScanCursor: null },
+        });
+        continue;
+      }
 
       const maxExpiry = new Date(now.getTime() + Math.max(...reminderDays) * dayMs);
-      const grants = await db.creditGrant.findMany({
-        where: {
-          shop: settings.shop,
-          status: { in: ["ISSUED", "PARTIALLY_REVERSED"] },
-          expiresAt: { gt: now, lte: maxExpiry },
-          shopifyAccountGid: { not: null },
-          shopifyTransactionGid: { not: null },
-        },
-        orderBy: { expiresAt: "asc" },
-        take: 500,
-        select: {
-          id: true,
-          customerGid: true,
-          amount: true,
-          currencyCode: true,
-          expiresAt: true,
-          shopifyAccountGid: true,
-          shopifyTransactionGid: true,
-        },
-      });
-
-      const notifications = [];
-      for (const grant of grants) {
-        if (!grant.expiresAt || !grant.shopifyAccountGid || !grant.shopifyTransactionGid) continue;
-        const daysRemaining = Math.max(
-          1,
-          Math.ceil((grant.expiresAt.getTime() - now.getTime()) / dayMs),
-        );
-        const reminderDay = reminderDays.find((day) => daysRemaining <= day);
-        if (!reminderDay) continue;
-
-        notifications.push({
-          shop: settings.shop,
-          customerGid: grant.customerGid,
-          dedupeKey: "credit-expiring:" + settings.shop + ":" + grant.id + ":" + reminderDay,
-          type: "CREDIT_EXPIRING" as const,
-          status: "QUEUED" as const,
-          templateKey: "CREDIT_EXPIRING",
-          scheduledAt: now,
-          metadata: {
-            creditGrantId: grant.id,
-            amount: String(grant.amount),
-            currencyCode: grant.currencyCode,
-            expiresAt: grant.expiresAt.toISOString(),
-            shopifyAccountGid: grant.shopifyAccountGid,
-            shopifyTransactionGid: grant.shopifyTransactionGid,
-            reminderDays: reminderDay,
+      let cursor: string | null = settings.expiryScanCursor;
+      let pagesProcessed = 0;
+      let completed = false;
+      let ownsLease = true;
+      while (pagesProcessed < MAX_EXPIRY_SCAN_PAGES_PER_RUN) {
+        const grants: ExpiryScanGrant[] = await db.creditGrant.findMany({
+          where: {
+            shop: settings.shop,
+            status: { in: ["ISSUED", "PARTIALLY_REVERSED"] },
+            expiresAt: { gt: now, lte: maxExpiry },
+            shopifyAccountGid: { not: null },
+            shopifyTransactionGid: { not: null },
+            ...(cursor ? { id: { gt: cursor } } : {}),
+          },
+          orderBy: { id: "asc" },
+          take: EXPIRY_SCAN_PAGE_SIZE,
+          select: {
+            id: true,
+            customerGid: true,
+            amount: true,
+            currencyCode: true,
+            expiresAt: true,
+            shopifyAccountGid: true,
+            shopifyTransactionGid: true,
           },
         });
+        if (grants.length === 0) {
+          completed = true;
+          break;
+        }
+
+        const notifications = [];
+        for (const grant of grants) {
+          if (!grant.expiresAt || !grant.shopifyAccountGid || !grant.shopifyTransactionGid) continue;
+          const daysRemaining = Math.max(
+            1,
+            Math.ceil((grant.expiresAt.getTime() - now.getTime()) / dayMs),
+          );
+          const reminderDay = reminderDays.find((day) => daysRemaining <= day);
+          if (!reminderDay) continue;
+
+          notifications.push({
+            shop: settings.shop,
+            customerGid: grant.customerGid,
+            dedupeKey: "credit-expiring:" + settings.shop + ":" + grant.id + ":" + reminderDay,
+            type: "CREDIT_EXPIRING" as const,
+            status: "QUEUED" as const,
+            templateKey: "CREDIT_EXPIRING",
+            scheduledAt: now,
+            metadata: {
+              creditGrantId: grant.id,
+              amount: String(grant.amount),
+              currencyCode: grant.currencyCode,
+              expiresAt: grant.expiresAt.toISOString(),
+              shopifyAccountGid: grant.shopifyAccountGid,
+              shopifyTransactionGid: grant.shopifyTransactionGid,
+              reminderDays: reminderDay,
+            },
+          });
+        }
+
+        if (notifications.length > 0) {
+          const result = await db.notification.createMany({
+            data: notifications,
+            skipDuplicates: true,
+          });
+          queued += result.count;
+        }
+        cursor = grants[grants.length - 1].id;
+        pagesProcessed += 1;
+
+        const progress = await db.emailNotificationSettings.updateMany({
+          where: { id: settings.id, lastExpiryScanAt: now, expiryScanInProgress: true },
+          data: { expiryScanCursor: cursor },
+        });
+        if (progress.count === 0) {
+          ownsLease = false;
+          break;
+        }
+        if (grants.length < EXPIRY_SCAN_PAGE_SIZE) {
+          completed = true;
+          break;
+        }
       }
 
-      if (notifications.length > 0) {
-        const result = await db.notification.createMany({
-          data: notifications,
-          skipDuplicates: true,
-        });
-        queued += result.count;
-      }
+      if (!ownsLease) continue;
+
+      await db.emailNotificationSettings.updateMany({
+        where: { id: settings.id, lastExpiryScanAt: now, expiryScanInProgress: true },
+        data: {
+          expiryScanInProgress: false,
+          expiryScanCursor: completed ? null : cursor,
+        },
+      });
     } catch (error) {
       await db.emailNotificationSettings.updateMany({
         where: { id: settings.id, lastExpiryScanAt: now },
-        data: { lastExpiryScanAt: settings.lastExpiryScanAt },
+        data: {
+          lastExpiryScanAt: settings.lastExpiryScanAt,
+          expiryScanInProgress: false,
+        },
       });
       console.error("[CreditFlow] Expiry notification scan failed", {
         shop: settings.shop,
@@ -458,6 +568,7 @@ export async function processCreditEmailNotification({
 
   const shopName = store?.name || notification.shop;
   const type = isIssued ? "issued" : "expiring";
+  const orderName = String(metadata.orderName ?? "").trim();
   const email = renderCreditEmail({
     type,
     settings: settings ?? {},
@@ -470,6 +581,9 @@ export async function processCreditEmailNotification({
         ? formatExpiryDate(expiresAt, store?.ianaTimezone)
         : "",
       shopUrl: shopUrl(context, notification.shop),
+      rewardReason: isIssued && orderName && !/^(?:gid:\/\/|\d+$)/i.test(orderName)
+        ? "order " + orderName
+        : "your qualifying order",
     },
   });
 

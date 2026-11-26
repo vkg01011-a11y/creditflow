@@ -492,6 +492,8 @@ model EmailNotificationSettings {
 
   footerText           String?                @db.VarChar(240)
   lastExpiryScanAt     DateTime?
+  expiryScanInProgress Boolean                @default(false)
+  expiryScanCursor     String?
 
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt

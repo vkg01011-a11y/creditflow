@@ -18,6 +18,8 @@ services:
         value: "3000"
       - key: SHOPIFY_APP_URL
         value: https://creditflow-staging-web.onrender.com
+      - key: SHOPIFY_APP_HANDLE
+        value: creditflow-1
       - key: SCOPES
         value: read_orders,read_customers,read_products,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions
       - key: DATABASE_URL
@@ -38,6 +40,8 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: CREDITFLOW_EMAIL_FROM
+        sync: false
+      - key: CREDITFLOW_SUPPORT_EMAIL
         sync: false
 
   - type: cron

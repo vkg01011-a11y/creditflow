@@ -64,12 +64,11 @@ export default function App() {
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
         <s-link href="/app">Overview</s-link>
-        <s-link href="/app/setup">Setup</s-link>
         <s-link href="/app/automations">Rewards</s-link>
-        <s-link href="/app/notifications">Emails</s-link>
-        <s-link href="/app/billing">Plan &amp; usage</s-link>
-        <s-link href="/app/automation-history">Activity</s-link>
-        <s-link href="/app/reversals">Refunds</s-link>
+        <s-link href="/app/automation-history">Store credit &amp; activity</s-link>
+        <s-link href="/app/notifications">Customer emails</s-link>
+        <s-link href="/app/billing">Plan &amp; billing</s-link>
+        <s-link href="/app/support">Settings &amp; support</s-link>
       </s-app-nav>
 
       <Outlet />

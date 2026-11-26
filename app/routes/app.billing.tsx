@@ -21,9 +21,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let billingError: string | null = null;
   try { billing = await getBillingStatus(admin, session.shop, new URL(request.url).searchParams.has("plan_handle")); }
   catch { billingError = "Shopify billing status could not be refreshed. Check Partner API credentials and permissions."; }
+  const trialDaysRemaining = billing?.isTrial && billing.trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(billing.trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+    : null;
   return {
     billing,
     billingError,
+    trialDaysRemaining,
     pricingUrl: getPlanSelectionUrl(session.shop),
     plans: Object.values(BILLING_PLANS),
   };
@@ -37,7 +41,7 @@ export default function BillingPage() {
     : !billing?.configured
       ? "Plan and billing-cycle details are not connected in this environment."
       : billing.isTrial
-        ? "Free trial ends " + dateLabel(billing.trialEndsAt) + ". Trial orders are not sent as billable usage events."
+        ? "Free trial ends " + dateLabel(billing.trialEndsAt) + (data.trialDaysRemaining == null ? "." : " · " + data.trialDaysRemaining + " day" + (data.trialDaysRemaining === 1 ? "" : "s") + " remaining.") + " Trial orders are not sent as billable usage events."
         : billing.cycleStart && billing.cycleEnd
           ? "Billing cycle: " + dateLabel(billing.cycleStart) + " to " + dateLabel(billing.cycleEnd) + "."
           : billing.active
@@ -67,13 +71,13 @@ export default function BillingPage() {
             : billing.isTrial
               ? <div className="cf-billing-note">Orders evaluated during the trial are not sent as billable usage events. Shopify applies the configured usage meter after the trial ends.</div>
               : ["starter", "growth", "professional"].includes(billing.plan) && billing.active
-                ? <div className="cf-billing-note">Additional evaluated orders are $0.10 each after the included allowance. Shopify calculates and invoices usage using the configured meter.</div>
+                ? <div className="cf-billing-note">This plan is designed to include {billing.includedOrders?.toLocaleString()} evaluated orders, then charge $0.10 for each additional order through Shopify App Pricing. The live meter is configured in Shopify’s Partner Dashboard; final charges appear on the Shopify invoice.</div>
                 : billing.active
                   ? <div className="cf-billing-note">Shopify returned a plan that CreditFlow does not recognize. Usage events are paused for review; contact CreditFlow support.</div>
                   : <div className="cf-billing-note">Starter access remains available while no subscription is active. Select the Starter plan in Shopify to enable its 100 included orders and $0.10 overage meter. Until selected, no usage charges are submitted.</div>}
         </section>
         <section className="cf-billing-card"><h2>CreditFlow plans</h2><div className="cf-plan-grid">{data.plans.map((plan) => <article className="cf-plan" key={plan.handle}><strong>{plan.name}</strong><div className="cf-plan-price">${plan.monthlyPrice.toFixed(2)}<small>/month</small></div><p>{plan.unlimited ? "Unlimited orders · no usage overage" : plan.includedOrders?.toLocaleString() + " orders included · $0.10 per additional order"}</p><p>{plan.trialDays ? "14-day free trial" : "Free forever"}</p><p>{plan.brandedEmails ? "Branded emails and expiry reminders" : "Shopify-native notifications"}</p></article>)}</div></section>
-        <div className="cf-billing-note">Usage is one distinct, fully fulfilled Shopify order evaluated by CreditFlow, whether or not a reward is issued. Duplicate webhook deliveries and worker retries do not add another unit. Refunds do not erase processed usage. App Events payloads contain no customer or order details.</div>
+        <div className="cf-billing-note">Usage is one distinct, fully fulfilled Shopify order evaluated by CreditFlow, whether or not a reward is issued. Duplicate webhook deliveries and worker retries do not add another unit. Refunds do not erase processed usage. CreditFlow reports usage to Shopify; Shopify validates events, applies the configured meter and bills the final amount. App Events payloads contain no customer or order details.</div>
       </div>
     </s-page>
   );

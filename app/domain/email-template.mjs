@@ -1,7 +1,10 @@
+export const DEFAULT_ISSUED_MESSAGE = "Thank you for shopping with {{ shop_name }}. We've added {{ credit_amount }} to your store credit account as a reward for {{ reward_reason }}.";
+export const LEGACY_DEFAULT_ISSUED_MESSAGE = "Thank you for shopping with {{ shop_name }}. We've added {{ credit_amount }} to your store credit account.";
+
 const DEFAULTS = {
   issuedSubject: "A little something for your next order",
   issuedHeadline: "You've got store credit!",
-  issuedMessage: "Thank you for shopping with {{ shop_name }}. We've added {{ credit_amount }} to your store credit account.",
+  issuedMessage: DEFAULT_ISSUED_MESSAGE,
   issuedCtaLabel: "Shop now",
   expirySubject: "Your store credit is about to expire",
   expiryHeadline: "A little reminder before it expires",
@@ -61,8 +64,10 @@ export function renderCreditEmail({ type, settings = {}, data = {} }) {
     || DEFAULTS[issued ? "issuedSubject" : "expirySubject"];
   const headlineTemplate = settings[issued ? "issuedHeadline" : "expiryHeadline"]
     || DEFAULTS[issued ? "issuedHeadline" : "expiryHeadline"];
-  const messageTemplate = settings[issued ? "issuedMessage" : "expiryMessage"]
-    || DEFAULTS[issued ? "issuedMessage" : "expiryMessage"];
+  const configuredMessage = settings[issued ? "issuedMessage" : "expiryMessage"];
+  const messageTemplate = issued && configuredMessage === LEGACY_DEFAULT_ISSUED_MESSAGE
+    ? DEFAULT_ISSUED_MESSAGE
+    : configuredMessage || DEFAULTS[issued ? "issuedMessage" : "expiryMessage"];
   const ctaLabel = settings[issued ? "issuedCtaLabel" : "expiryCtaLabel"]
     || DEFAULTS[issued ? "issuedCtaLabel" : "expiryCtaLabel"];
 
@@ -72,6 +77,7 @@ export function renderCreditEmail({ type, settings = {}, data = {} }) {
     credit_amount: data.creditAmount ?? "",
     remaining_amount: data.remainingAmount ?? "",
     expiry_date: data.expiryDate ?? "",
+    reward_reason: data.rewardReason ?? "your qualifying order",
   };
 
   const subject = interpolateText(subjectTemplate, values)

@@ -23,6 +23,7 @@ import {
   processCustomerRedaction,
   processShopRedaction,
 } from "../services/privacy.server";
+import { allocateWorkerQueueLimits } from "../domain/worker-batch.mjs";
 
 type WebhookJob = {
   id: string;
@@ -810,6 +811,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const limit = Number.isInteger(requestedLimit)
     ? Math.min(MAX_BATCH_SIZE, Math.max(1, requestedLimit))
     : 5;
+  const queueLimits = allocateWorkerQueueLimits(limit);
 
   const workerId = randomUUID();
   await db.workerRun.create({ data: { id: workerId } });
@@ -838,9 +840,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     ]);
 
     const [webhookJobs, privacyJobs, billingUsageJobs] = await Promise.all([
-      claimWebhookJobs(limit, workerId),
-      claimPrivacyJobs(limit, workerId),
-      claimBillingUsageJobs(limit, workerId),
+      claimWebhookJobs(queueLimits.webhooks, workerId),
+      claimPrivacyJobs(queueLimits.privacy, workerId),
+      claimBillingUsageJobs(queueLimits.billingUsage, workerId),
     ]);
 
     // Include privacy jobs claimed in this cycle, closing the race where a
@@ -871,7 +873,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Claim email jobs only after this cycle's privacy work is known.
     const notificationJobs = await claimNotificationJobs(
-      limit,
+      queueLimits.notifications,
       workerId,
       shopsWithPrivacyWork,
     );
