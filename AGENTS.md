@@ -1,8 +1,8 @@
-# CreditFlow Repository Guide
+# Pikmora Perks Repository Guide
 
 ## Purpose and safety rules
 
-CreditFlow is a public, embedded Shopify app for cashback rewards. Shopify Native Store Credit is the only customer balance authority. CreditFlow persists rules, grant and reversal metadata, idempotency records, transaction references, operational queues, and reporting data; it must never maintain or expose a competing wallet balance.
+Pikmora Perks is a public, embedded Shopify app for cashback rewards. Shopify Native Store Credit is the only customer balance authority. Pikmora Perks persists rules, grant and reversal metadata, idempotency records, transaction references, operational queues, and reporting data; it must never maintain or expose a competing wallet balance.
 
 Use the Shopify AI Toolkit for Shopify API, App Pricing, and platform work. Check current Shopify documentation and schemas before changing GraphQL operations, scopes, webhook configuration, pricing behavior, or Shopify CLI configuration. Do not add toolkit dependencies to this repository; install/use the toolkit in the agent host. See the [Shopify AI Toolkit](https://shopify.dev/docs/api/ai-toolkit).
 
@@ -41,7 +41,7 @@ Important areas:
 
 ## Store Credit, rewards, and refunds
 
-The fulfillment webhook route authenticates with Shopify, minimizes the payload, and inserts a unique `shop + webhookId` record before returning. It does not issue credit in the request handler. The worker loads the shop's offline Admin API context and calls Shopify's Store Credit GraphQL mutation. Shopify returns the Store Credit transaction and account IDs; CreditFlow saves those references with the grant and metadata ledger entry.
+The fulfillment webhook route authenticates with Shopify, minimizes the payload, and inserts a unique `shop + webhookId` record before returning. It does not issue credit in the request handler. The worker loads the shop's offline Admin API context and calls Shopify's Store Credit GraphQL mutation. Shopify returns the Store Credit transaction and account IDs; Pikmora Perks saves those references with the grant and metadata ledger entry.
 
 Rules support fulfilled-order triggers, percentage or fixed rewards, order-subtotal or eligible-item bases, product include/exclude targeting, minimums, caps, expiry, prepaid requirements, and AND/OR conditions. Rules run by ascending priority and the first matching rule awards credit; rewards do not stack. Reward arithmetic uses integer currency minor units via `BigInt`, including zero- and three-decimal currencies.
 
@@ -90,7 +90,7 @@ Required private billing environment values are `SHOPIFY_PARTNER_ID` (numeric Pa
 
 ## Branded customer email
 
-Credit-issued email modes are mutually exclusive: Shopify native (default), CreditFlow custom via Resend, or disabled. Custom credit-issued email suppresses Shopify's native notification and queues a single Resend delivery after the Shopify transaction and local metadata are saved. A stable Resend idempotency key protects retries. Expiry reminders are opt-in for 7, 3, and/or 1 day before expiry; immediately before delivery, Shopify's exact transaction expiry and remaining amount are checked. Custom emails/reminders require Professional or Business at save/delivery time. Provider secrets are `RESEND_API_KEY` and `CREDITFLOW_EMAIL_FROM`; merchant email designs are stored in `EmailNotificationSettings`.
+Credit-issued email modes are mutually exclusive: Shopify native (default), Pikmora Perks custom via Resend, or disabled. Custom credit-issued email suppresses Shopify's native notification and queues a single Resend delivery after the Shopify transaction and local metadata are saved. A stable Resend idempotency key protects retries. Expiry reminders are opt-in for 7, 3, and/or 1 day before expiry; immediately before delivery, Shopify's exact transaction expiry and remaining amount are checked. Custom emails/reminders require Professional or Business at save/delivery time. Provider secrets are `RESEND_API_KEY` and `CREDITFLOW_EMAIL_FROM`; merchant email designs are stored in `EmailNotificationSettings`.
 
 ## Deployment, configuration, and commands
 

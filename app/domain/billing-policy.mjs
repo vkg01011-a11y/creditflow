@@ -5,7 +5,7 @@ const MAX_FUTURE_EVENT_SKEW_MS = 5 * 60 * 1000;
 
 export const BILLING_REVIEW_MESSAGES = Object.freeze({
   STATUS_UNVERIFIED:
-    "CreditFlow could not verify this order's plan when it was evaluated. No usage event was sent. Review the Shopify subscription before reconciling.",
+    "Pikmora Perks could not verify this order's plan when it was evaluated. No usage event was sent. Review the Shopify subscription before reconciling.",
   PLAN_CHANGED:
     "The subscription changed before this usage event was sent. No event was submitted. Review the subscription and billing cycle before reconciling.",
   CYCLE_UNAVAILABLE:
@@ -15,9 +15,9 @@ export const BILLING_REVIEW_MESSAGES = Object.freeze({
   DELIVERY_UNCERTAIN:
     "Shopify did not confirm this usage event after retries. Check the App Billing Event log before any further action.",
   TEMPORARY_FAILURE:
-    "Shopify could not confirm the usage event. CreditFlow will retry with the same idempotency key.",
+    "Shopify could not confirm the usage event. Pikmora Perks will retry with the same idempotency key.",
   PLAN_UNSUPPORTED:
-    "Shopify returned a plan that CreditFlow does not recognize. No usage event was submitted. Contact CreditFlow support before reconciling.",
+    "Shopify returned a plan that Pikmora Perks does not recognize. No usage event was submitted. Contact Pikmora Perks support before reconciling.",
 });
 
 const REVIEW_MESSAGE_BY_REASON = Object.freeze({

@@ -62,6 +62,14 @@ export default function App() {
 
   return (
     <AppProvider apiKey={apiKey}>
+      <header className="pp-brand-header" aria-label="Pikmora Perks">
+        <img src="/branding/pikmora-perks.png" alt="" width="40" height="40" />
+        <span className="pp-brand-copy">
+          <span className="pp-brand-parent">Pikmora · PP</span>
+          <strong>Pikmora Perks</strong>
+          <span className="pp-brand-tagline">Rewards. Retention. Repeat.</span>
+        </span>
+      </header>
       <s-app-nav>
         <s-link href="/app">Overview</s-link>
         <s-link href="/app/automations">Rewards</s-link>

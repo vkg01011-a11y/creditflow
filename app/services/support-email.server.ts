@@ -44,7 +44,7 @@ export async function sendMerchantSupportRequest({
       "User-Agent": "CreditFlow/1.0",
     },
     body: JSON.stringify({
-      from: "CreditFlow Support <" + senderAddress + ">",
+      from: "Pikmora Perks Support <" + senderAddress + ">",
       to: [supportAddress],
       reply_to: request.email,
       subject: "[" + request.category + "] " + request.subject,

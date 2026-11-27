@@ -42,7 +42,7 @@ export function normalizeSupportRequest(input) {
 
 export function buildSupportEmailText({ shop, request }) {
   return [
-    "CreditFlow merchant support request",
+    "Pikmora Perks merchant support request",
     "Shop: " + String(shop),
     "Category: " + request.category,
     "Priority: " + request.priority,

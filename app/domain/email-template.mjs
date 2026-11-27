@@ -10,7 +10,7 @@ const DEFAULTS = {
   expiryHeadline: "A little reminder before it expires",
   expiryMessage: "You still have {{ remaining_amount }} in store credit. Use it before {{ expiry_date }}.",
   expiryCtaLabel: "Use my credit",
-  accentColor: "#176B5B",
+  accentColor: "#5B21B6",
 };
 
 function escapeHtml(value) {

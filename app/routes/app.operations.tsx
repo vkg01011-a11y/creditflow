@@ -301,7 +301,7 @@ export default function OperationsPage() {
           </div>
           {data.totals.billingUsageActionRequired > 0 ? (
             <div className="cfo-notice">
-              Review these events in Shopify Dev Dashboard → App Billing Events before taking action. CreditFlow does not automatically resend an event that needs review.
+              Review these events in Shopify Dev Dashboard → App Billing Events before taking action. Pikmora Perks does not automatically resend an event that needs review.
             </div>
           ) : null}
           {data.billingUsageGroups.length === 0 ? (

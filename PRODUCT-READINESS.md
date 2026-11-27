@@ -1,4 +1,4 @@
-# CreditFlow product-readiness checklist
+# Pikmora Perks product-readiness checklist
 
 Updated: 2026-11-27
 
@@ -30,7 +30,7 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Deployment instructions for release migrations, web process, and scheduled worker.
 - [x] Render Blueprint for a feature-branch staging web service, private Postgres, and one-minute cron worker.
 - [x] Merchant-facing Customer emails settings with live issued/expiry email preview, logo, colour, sender, reply-to, subjects, body, and CTA customization.
-- [x] Mutually exclusive Shopify-native or CreditFlow-branded credit-issued email modes.
+- [x] Mutually exclusive Shopify-native or Pikmora Perks-branded credit-issued email modes.
 - [x] Resend delivery queue with retry and idempotency protection.
 - [x] Opt-in 7/3/1-day credit-expiry reminders, checked against Shopify's exact remaining credit transaction amount before delivery.
 - [x] Operations visibility for customer email queue states and failures.
@@ -46,14 +46,14 @@ This is an engineering readiness tracker, not a claim that the app is approved f
 - [x] Expiry scans use a persisted cursor, page-size limit, per-run work cap, and per-shop lease for crash recovery.
 - [x] Worker claims share a single invocation limit across webhook, privacy, notification and billing queues, with rotating remainder allocation.
 - [x] Merchant support form and configurable support-email link report when staging email settings are absent.
-- [x] Dashboard labels CreditFlow credit issuance and reversals separately and explains that current records do not establish native balance, redemption or expiry totals.
+- [x] Dashboard labels Pikmora Perks credit issuance and reversals separately and explains that current records do not establish native balance, redemption or expiry totals.
 
 ## Verified development-store flows
 
 These checks were performed against the connected development store and local PostgreSQL. They are not a substitute for a clean-install and privacy compliance test pass.
 
 - [x] Create a cashback rule paused, then deliberately enable the QA rule.
-- [x] Fulfill an eligible order and verify native Shopify Store Credit plus CreditFlow grant/ledger records.
+- [x] Fulfill an eligible order and verify native Shopify Store Credit plus Pikmora Perks grant/ledger records.
 - [x] Replay the fulfillment webhook and confirm the reward is not duplicated.
 - [x] Process a partial merchandise refund and verify the proportional native Store Credit debit.
 - [x] Process a second partial refund and verify only the remaining incremental debit.
@@ -82,7 +82,7 @@ These checks were performed against the connected development store and local Po
 
 ## Customer email release gates
 
-- [x] Implement Shopify-native versus CreditFlow-branded issue email selection without sending both for one grant.
+- [x] Implement Shopify-native versus Pikmora Perks-branded issue email selection without sending both for one grant.
 - [x] Implement merchant email design controls and live preview.
 - [x] Implement a plan-gated test email send for the saved merchant design.
 - [x] Implement opt-in expiry reminders with Shopify remainingAmount verification and idempotent queued delivery.
@@ -133,7 +133,7 @@ These checks were performed against the connected development store and local Po
 
 ## Commercial and Shopify App Store gates
 
-CreditFlow uses Shopify App Pricing. Starter is $0/month with 100 evaluated orders then $0.10/order; Growth is $9/month with 300 then $0.10/order; Professional is $19/month with 1,000 then $0.10/order; Business is $49/month with unlimited orders and no overage. Growth, Professional, and Business have a 14-day trial; Starter is free forever. Branded email and expiry reminders are Professional/Business features.
+Pikmora Perks uses Shopify App Pricing. Starter is $0/month with 100 evaluated orders then $0.10/order; Growth is $9/month with 300 then $0.10/order; Professional is $19/month with 1,000 then $0.10/order; Business is $49/month with unlimited orders and no overage. Growth, Professional, and Business have a 14-day trial; Starter is free forever. Branded email and expiry reminders are Professional/Business features.
 
 - [ ] Confirm the launch feature boundary and referral disclosures.
 - [ ] Verify Shopify API scopes are minimal and accurately described.
@@ -145,7 +145,7 @@ CreditFlow uses Shopify App Pricing. Starter is $0/month with 100 evaluated orde
 ## Safety invariants
 
 1. Shopify Native Store Credit is the authoritative customer balance.
-2. CreditFlow never calculates or displays a wallet balance by summing its own ledger.
+2. Pikmora Perks never calculates or displays a wallet balance by summing its own ledger.
 3. A credit or debit mutation with an uncertain external outcome is not blindly repeated.
 4. Every financial operation is scoped to the authenticated Shopify shop.
 5. Customer and shop privacy requests must remain observable until completed or escalated.

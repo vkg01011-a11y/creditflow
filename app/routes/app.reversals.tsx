@@ -98,7 +98,7 @@ export default function ReversalsPage() {
         {needsReview > 0 ? (
           <div className="cfr-alert">
             <strong>{needsReview} reversal(s) need reconciliation.</strong>
-            CreditFlow will not automatically repeat a Shopify debit when its
+            Pikmora Perks will not automatically repeat a Shopify debit when its
             outcome is uncertain or the customer has insufficient store credit.
             Check the customer&apos;s Shopify store-credit transactions before
             deciding on a manual adjustment.

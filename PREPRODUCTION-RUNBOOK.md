@@ -1,4 +1,4 @@
-# CreditFlow pre-production deployment runbook
+# Pikmora Perks pre-production deployment runbook
 
 This runbook describes a staged deployment. Do not point a live merchant store at this environment until all release gates are signed off.
 
@@ -43,7 +43,7 @@ Set these values in the provider's secret environment manager:
 | `SHADOW_DATABASE_URL` | Separate shadow database connection string for Prisma schema tooling |
 | `CREDITFLOW_WORKER_SECRET` | Unique cryptographically random secret, at least 32 characters |
 | `RESEND_API_KEY` | Resend transactional email API key |
-| `CREDITFLOW_EMAIL_FROM` | Sender display name and address on a verified Resend domain, e.g. `CreditFlow Rewards <rewards@your-domain.com>` |
+| `CREDITFLOW_EMAIL_FROM` | Sender display name and address on a verified Resend domain, e.g. `Pikmora Perks Rewards <rewards@your-domain.com>` |
 
 Never commit production values to Git, print them in build logs, or place them in browser-visible code.
 
@@ -84,10 +84,10 @@ Do not deploy the current `https://example.com` placeholders to a production app
 
 ## 6. Customer email delivery
 
-CreditFlow supports two mutually exclusive credit-issued email channels:
+Pikmora Perks supports two mutually exclusive credit-issued email channels:
 
 - Shopify native notification: the Store Credit mutation uses Shopify's `notify: true` flag. Merchants edit this template in Shopify Admin → Settings → Notifications.
-- CreditFlow branded notification: the app uses `notify: false` for that grant and queues a designed transactional email through Resend. Merchants customize its logo, brand colour, sender display name, reply-to, subject, headline, body, CTA, and footer in `/app/notifications`.
+- Pikmora Perks branded notification: the app uses `notify: false` for that grant and queues a designed transactional email through Resend. Merchants customize its logo, brand colour, sender display name, reply-to, subject, headline, body, CTA, and footer in `/app/notifications`.
 
 The branded channel requires:
 
@@ -96,7 +96,7 @@ The branded channel requires:
 3. `CREDITFLOW_EMAIL_FROM` set to an address on the verified domain.
 4. Shopify scopes `read_store_credit_accounts` and `read_store_credit_account_transactions` approved by the merchant after app reauthorization if required.
 
-Expiry reminders are separately disabled by default. Merchants may select 7, 3, and/or 1 day before expiry. CreditFlow checks the exact Shopify credit transaction's `expiresAt` and `remainingAmount` immediately before sending. No reminder is sent if the credit has expired, has been fully spent, or Shopify no longer reports an expiry for that transaction.
+Expiry reminders are separately disabled by default. Merchants may select 7, 3, and/or 1 day before expiry. Pikmora Perks checks the exact Shopify credit transaction's `expiresAt` and `remainingAmount` immediately before sending. No reminder is sent if the credit has expired, has been fully spent, or Shopify no longer reports an expiry for that transaction.
 
 The worker processes notification jobs through the same durable queue and exposes the result in **Operations**. Resend requests use a stable idempotency key to protect against duplicate sends when the worker retries an uncertain network request.
 
@@ -153,7 +153,7 @@ Add these as private hosting secrets/configuration: `SHOPIFY_PARTNER_ID` (the nu
 
 Test only with a development store in the same Partner organization using no-charge plans. Verify each plan handle, trial duration, included meter allowance, and $0.10 event price. A 202 Accepted response confirms receipt only; inspect Dev Dashboard App Billing Event logs for asynchronous billing validation. Never use production stores for paid testing.
 
-Usage is one distinct fully fulfilled order that CreditFlow evaluates after customer and currency validation, regardless of whether a reward is issued. Duplicate webhook deliveries and worker retries do not add usage. Refunds do not remove usage. Trial, Business, and shops without an active plan selection do not emit overage events.
+Usage is one distinct fully fulfilled order that Pikmora Perks evaluates after customer and currency validation, regardless of whether a reward is issued. Duplicate webhook deliveries and worker retries do not add usage. Refunds do not remove usage. Trial, Business, and shops without an active plan selection do not emit overage events.
 
 Core rewards, Shopify-native Store Credit, refund safety, and privacy features remain available on Starter. Branded emails and expiry reminders require Professional or Business and the delivery worker rechecks entitlement.
 

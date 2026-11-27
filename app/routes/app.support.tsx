@@ -41,7 +41,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     if (!process.env.CREDITFLOW_SUPPORT_EMAIL?.trim()) {
-      throw new Error("CreditFlow support email is not configured for this environment.");
+      throw new Error("Pikmora Perks support email is not configured for this environment.");
     }
     if (!process.env.RESEND_API_KEY || !process.env.CREDITFLOW_EMAIL_FROM) {
       throw new Error("Support email delivery is not configured for this environment.");
@@ -90,7 +90,7 @@ export default function SupportPage() {
       <div className="cf-support">
         <style>{`.cf-support{display:grid;gap:18px;padding:8px 0 38px;color:#202923}.cf-support *{box-sizing:border-box}.cf-support-intro{max-width:760px;margin:0;color:#748078;font-size:13px;line-height:1.7}.cf-support-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr);gap:14px;align-items:start}.cf-support-panel{display:grid;gap:13px;padding:18px;border:1px solid #e5eae6;border-radius:12px;background:#fff}.cf-support-panel h2{margin:0;color:#2b3830;font-size:15px}.cf-support-panel p{margin:0;color:#748078;font-size:12px;line-height:1.65}.cf-support-fields{display:grid;grid-template-columns:1fr 1fr;gap:11px}.cf-support-field{display:grid;gap:5px;min-width:0}.cf-support-field--full{grid-column:1/-1}.cf-support-field label{color:#465148;font-size:11px;font-weight:650}.cf-support-field input,.cf-support-field select,.cf-support-field textarea{width:100%;min-height:38px;padding:9px 10px;border:1px solid #dce3de;border-radius:7px;background:#fff;color:#29332c;font:inherit;font-size:12px}.cf-support-field textarea{min-height:140px;resize:vertical;line-height:1.55}.cf-support-hint{color:#89948c;font-size:10px;line-height:1.5}.cf-support-submit{justify-self:start;min-height:38px;padding:0 14px;border:0;border-radius:8px;background:#263b30;color:#fff;font-size:12px;font-weight:650;cursor:pointer}.cf-support-submit:disabled{opacity:.55;cursor:wait}.cf-support-alert{padding:11px 13px;border:1px solid #e4eae5;border-radius:8px;background:#f7faf7;color:#5f6d64;font-size:12px;line-height:1.55}.cf-support-alert--error{border-color:#efd8d4;background:#fff7f5;color:#934b40}.cf-support-list{display:grid;gap:11px;margin:0;padding-left:18px;color:#66736b;font-size:11px;line-height:1.6}.cf-support-mark{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:760px){.cf-support-grid{grid-template-columns:1fr}}@media(max-width:560px){.cf-support-fields{grid-template-columns:1fr}.cf-support-field--full{grid-column:auto}}`}</style>
         <p className="cf-support-intro">
-          CreditFlow pairs flexible reward rules with Shopify Native Store Credit, refund-aware reversals and clear activity records. Your customers’ available credit remains in Shopify.
+          Pikmora Perks pairs flexible reward rules with Shopify Native Store Credit, refund-aware reversals and clear activity records. Your customers’ available credit remains in Shopify.
         </p>
         {!available ? (
           <div className="cf-support-alert cf-support-alert--error" role="status">
@@ -141,7 +141,7 @@ export default function SupportPage() {
             </fetcher.Form>
           </section>
           <aside className="cf-support-panel">
-            <h2>Why merchants use CreditFlow</h2>
+            <h2>Why merchants use Pikmora Perks</h2>
             <ul className="cf-support-list">
               <li>Set up cashback rules without code, then preview them before activation.</li>
               <li>Keep balances in Shopify Native Store Credit.</li>

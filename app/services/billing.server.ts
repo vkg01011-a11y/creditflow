@@ -89,7 +89,7 @@ async function loadBillingStatus(admin: ShopifyAdmin, shop: string): Promise<Bil
     trialEndsAt: subscription.trialEndsAt ?? null, cycleStart, cycleEnd, cancelAtEndOfCycle: Boolean(subscription.cancelAtEndOfCycle),
     usageQuantity: Number.isFinite(quantity) ? quantity : null, usageCostAmount: cost,
     usageCurrencyCode: meter?.usage?.cost?.currencyCode ?? null, shopGid,
-    message: plan ? (isTrial ? "Your " + plan.name + " trial is active." : plan.name + " is active.") : "A subscription exists, but its plan handle does not match CreditFlow configuration.",
+    message: plan ? (isTrial ? "Your " + plan.name + " trial is active." : plan.name + " is active.") : "A subscription exists, but its plan handle does not match Pikmora Perks configuration.",
   };
   cache.set(shop, { expiresAt: Date.now() + CACHE_TTL_MS, value });
   return value;

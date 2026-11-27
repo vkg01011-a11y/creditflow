@@ -44,7 +44,7 @@ export default function PrivacyRequestsPage() {
       <div className="cfp-page">
         <p className="cfp-intro">
           Customer data requests received from Shopify are listed here. Open a
-          completed export to review the CreditFlow data associated with that
+          completed export to review the Pikmora Perks data associated with that
           customer, then transfer any requested information through your
           approved privacy-response process.
         </p>

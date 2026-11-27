@@ -1,13 +1,18 @@
-/* CreditFlow UI system — vibrant accents, calm surfaces, clear hierarchy. */
+/* Pikmora Perks UI system — vibrant accents, calm surfaces, clear hierarchy. */
 :root {
   color-scheme: light;
-  --cf-ui-ink: #25253d;
-  --cf-ui-muted: #6e7188;
-  --cf-ui-soft: #f5f4fc;
-  --cf-ui-line: #e5e3f0;
-  --cf-ui-line-strong: #d3d0e7;
-  --cf-ui-accent: #5946d2;
-  --cf-ui-accent-soft: #efedff;
+  --pp-deep-purple: #3c075f;
+  --pp-purple: #5b21b6;
+  --pp-violet: #7a2ce1;
+  --pp-pink: #d83e9c;
+  --pp-orange: #f0a33a;
+  --cf-ui-ink: #28183b;
+  --cf-ui-muted: #706680;
+  --cf-ui-soft: #f7f2fc;
+  --cf-ui-line: #e8e0f0;
+  --cf-ui-line-strong: #d7c9e5;
+  --cf-ui-accent: var(--pp-purple);
+  --cf-ui-accent-soft: #f2eaff;
   --cf-ui-mint: #16865d;
   --cf-ui-coral: #d85f51;
   --cf-ui-amber: #9a6413;
@@ -1203,7 +1208,7 @@ body {
   }
 }
 
-/* CreditFlow colour system — bright accents with calm, readable surfaces. */
+/* Pikmora Perks colour system — deep purple, violet, pink and warm accents. */
 :root {
   --cf-ui-mint: #16865d;
   --cf-ui-coral: #d85f51;
@@ -1218,7 +1223,7 @@ body {
   padding: 23px 25px;
   border: 1px solid rgba(255, 255, 255, .22);
   border-radius: 17px;
-  background: linear-gradient(118deg, #4035ae 0%, #5b4bd2 56%, #8060d8 100%);
+  background: linear-gradient(118deg, var(--pp-deep-purple) 0%, var(--pp-purple) 50%, var(--pp-violet) 78%, var(--pp-pink) 100%);
   box-shadow: 0 12px 28px rgba(70, 57, 164, .18);
 }
 
@@ -1237,7 +1242,7 @@ body {
 
 .cf-dashboard--refined .cf-overview-head > * { position: relative; z-index: 1; }
 .cf-dashboard--refined .cf-overview-kicker { color: #e3e0ff; }
-.cf-dashboard--refined .cf-overview-kicker::before { background: #9de3c4; box-shadow: 0 0 0 4px rgba(157, 227, 196, .18); }
+.cf-dashboard--refined .cf-overview-kicker::before { background: var(--pp-orange); box-shadow: 0 0 0 4px rgba(240, 163, 58, .2); }
 .cf-dashboard--refined .cf-overview-title { color: #fff; }
 .cf-dashboard--refined .cf-overview-subtitle { color: #e9e7ff; }
 .cf-dashboard--refined .cf-overview-subtitle a { color: #fff; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, .45); text-underline-offset: 2px; }
@@ -1254,18 +1259,18 @@ body {
   transition: transform .16s ease, box-shadow .16s ease;
 }
 .cf-dashboard--refined .cf-stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(57, 47, 125, .1); }
-.cf-dashboard--refined .cf-stat-card:nth-child(1) { border-top: 3px solid #35a979; background: linear-gradient(145deg, #eaf8f0, #f8fcf9 78%); }
-.cf-dashboard--refined .cf-stat-card:nth-child(2) { border-top: 3px solid #8474e8; background: linear-gradient(145deg, #f0eeff, #fbfaff 78%); }
+.cf-dashboard--refined .cf-stat-card:nth-child(1) { border-top: 3px solid var(--pp-violet); background: linear-gradient(145deg, #f2eaff, #fbf8ff 78%); }
+.cf-dashboard--refined .cf-stat-card:nth-child(2) { border-top: 3px solid var(--pp-pink); background: linear-gradient(145deg, #fff0f8, #fffaff 78%); }
 .cf-dashboard--refined .cf-stat-card:nth-child(3) { border-top: 3px solid #e6a63e; background: linear-gradient(145deg, #fff5e3, #fffdfa 78%); }
 .cf-dashboard--refined .cf-stat-card:nth-child(4) { border-top: 3px solid #e27b6c; background: linear-gradient(145deg, #fff0ed, #fffafa 78%); }
-.cf-dashboard--refined .cf-stat-indicator--credit { background: #26966b; box-shadow: 0 0 0 4px rgba(38, 150, 107, .12); }
+.cf-dashboard--refined .cf-stat-indicator--credit { background: var(--pp-violet); box-shadow: 0 0 0 4px rgba(122, 44, 225, .15); }
 .cf-dashboard--refined .cf-stat-indicator--debit { background: #7869dc; box-shadow: 0 0 0 4px rgba(120, 105, 220, .12); }
 .cf-dashboard--refined .cf-stat-indicator--automation { background: #d8942f; box-shadow: 0 0 0 4px rgba(216, 148, 47, .13); }
-.cf-dashboard--refined .cf-stat-indicator--customer { background: #dc705f; box-shadow: 0 0 0 4px rgba(220, 112, 95, .12); }
+.cf-dashboard--refined .cf-stat-indicator--customer { background: var(--pp-pink); box-shadow: 0 0 0 4px rgba(216, 62, 156, .14); }
 
 .cf-dashboard--refined .cf-panel { border-color: #e8e5f2; border-radius: 13px; box-shadow: 0 4px 14px rgba(57, 47, 125, .045); }
 .cf-dashboard--refined .cf-activity-track { background: #efedf7; }
-.cf-dashboard--refined .cf-activity-fill { background: linear-gradient(90deg, #19a676, #69c69d); }
+.cf-dashboard--refined .cf-activity-fill { background: linear-gradient(90deg, var(--pp-purple), var(--pp-violet), var(--pp-pink)); }
 .cf-dashboard--refined .cf-activity-fill--debit { background: linear-gradient(90deg, #7562db, #a596f2); }
 .cf-dashboard--refined .cf-source-panel { border-color: #dedaf7; background: linear-gradient(145deg, #efedff, #faf9ff 78%); }
 .cf-dashboard--refined .cf-source-badge { border-color: #d8d2ff; background: #e9e6ff; color: #4b3db1; }
@@ -1275,8 +1280,8 @@ body {
 .cf-dashboard--refined .cf-table th { border-color: #e8e5f2; background: #f5f3ff; color: #716b98; }
 .cf-dashboard--refined .cf-table td { border-color: #f0eef7; }
 .cf-dashboard--refined .cf-table tbody tr:hover { background: #faf9ff; }
-.cf-dashboard--refined .cf-amount--credit { color: #16865d; }
-.cf-dashboard--refined .cf-amount--debit { color: #6754c8; }
+.cf-dashboard--refined .cf-amount--credit { color: var(--pp-purple); }
+.cf-dashboard--refined .cf-amount--debit { color: #b33a83; }
 
 .cf-billing .cf-billing-hero,
 .cfs-page .cfs-hero,
@@ -1304,11 +1309,11 @@ body {
 .cfs-page .cfs-step-action,
 .cfa-page .cfa-button--primary,
 .cfe-page .cfe-save,
-.cfsim .cfsim-button { border-color: #5544c6; background: #5544c6; color: #fff; }
+.cfsim .cfsim-button { border-color: var(--pp-purple); background: var(--pp-purple); color: #fff; }
 .cf-billing .cf-billing-button:hover,
 .cfa-page .cfa-button--primary:hover,
 .cfe-page .cfe-save:hover,
-.cfsim .cfsim-button:hover { border-color: #4031a9; background: #4031a9; color: #fff; }
+.cfsim .cfsim-button:hover { border-color: var(--pp-deep-purple); background: var(--pp-deep-purple); color: #fff; }
 
 .cf-billing .cf-billing-card,
 .cfs-page .cfs-panel,
@@ -1328,7 +1333,7 @@ body {
 .cfa-page .cfa-stat:nth-child(1),
 .cfe-page .cfe-card:nth-child(1),
 .cfo-page .cfo-card:nth-child(1),
-.cfr-page .cfr-stat:nth-child(1) { border-color: #dcefe4; background: linear-gradient(145deg, #eff9f3, #fff); }
+.cfr-page .cfr-stat:nth-child(1) { border-color: #e6d8f5; background: linear-gradient(145deg, #f4ebff, #fff); }
 .cf-billing .cf-billing-stat:nth-child(2),
 .cfa-page .cfa-stat:nth-child(2),
 .cfe-page .cfe-card:nth-child(2),
@@ -1344,16 +1349,16 @@ body {
 .cfe-page .cfe-card:nth-child(4),
 .cfo-page .cfo-card:nth-child(4),
 .cfr-page .cfr-stat:nth-child(4) { border-color: #f2dfdc; background: linear-gradient(145deg, #fff3f0, #fff); }
-.cf-billing .cf-billing-stat strong { color: #4436a8; }
+.cf-billing .cf-billing-stat strong { color: var(--pp-purple); }
 .cf-billing .cf-plan { border-color: #e3e0f0; background: #fff; box-shadow: 0 3px 10px rgba(57, 47, 125, .045); }
-.cf-billing .cf-plan:nth-child(2) { border-top: 3px solid #5946d2; background: linear-gradient(160deg, #f3f1ff, #fff 65%); }
-.cf-billing .cf-plan-price { color: #4f3dc1; }
+.cf-billing .cf-plan:nth-child(2) { border-top: 3px solid var(--pp-violet); background: linear-gradient(160deg, #f3eaff, #fff 65%); }
+.cf-billing .cf-plan-price { color: var(--pp-purple); }
 .cf-billing .cf-billing-note { border-color: #dfdcf5; background: #f4f2ff; color: #57557a; }
 
 .cfa-page .cfa-stat-value,
 .cfe-page .cfe-value,
 .cfo-page .cfo-value,
-.cfr-page .cfr-value { color: #4035a2; }
+.cfr-page .cfr-value { color: var(--pp-purple); }
 .cfa-page .cfa-info,
 .cfe-page .cfe-notice,
 .cfsim .cfsim-note,
@@ -1404,7 +1409,45 @@ body {
   outline-offset: 3px;
 }
 
+.pp-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 0 8px;
+  padding: 7px 0 13px;
+  border-bottom: 1px solid #eee5f7;
+  color: var(--pp-deep-purple);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.pp-brand-header > img { display: block; width: 40px; height: 40px; flex: 0 0 auto; object-fit: contain; }
+.pp-brand-copy { display: grid; gap: 1px; line-height: 1.2; }
+.pp-brand-copy strong { color: var(--pp-deep-purple); font-size: 14px; font-weight: 720; letter-spacing: -.02em; }
+.pp-brand-parent { color: var(--pp-violet); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.pp-brand-tagline { color: #756a84; font-size: 10px; }
+
+.cf-dashboard--refined a,
+.cf-billing a,
+.cfa-page a,
+.cfe-page a,
+.cfs-page a,
+.cfo-page a,
+.cfr-page a,
+.cfp-page a,
+.cf-support a { color: var(--pp-purple); }
+
+.cf-support .cf-support-submit {
+  border-color: var(--pp-purple);
+  background: linear-gradient(110deg, var(--pp-deep-purple), var(--pp-violet) 70%, var(--pp-pink));
+  color: #fff;
+}
+.cf-support .cf-support-submit:hover { border-color: var(--pp-deep-purple); background: var(--pp-deep-purple); }
+.cfe-page .cfe-save { border-color: var(--pp-purple); background: var(--pp-purple); }
+.cfe-page .cfe-save:hover { background: var(--pp-deep-purple); }
+
 @media (max-width: 620px) {
+  .pp-brand-header { padding: 6px 0 10px; }
+  .pp-brand-header > img { width: 36px; height: 36px; }
+  .pp-brand-tagline { font-size: 9px; }
   .cf-dashboard--refined .cf-overview-head,
   .cf-billing .cf-billing-hero,
   .cfs-page .cfs-hero,

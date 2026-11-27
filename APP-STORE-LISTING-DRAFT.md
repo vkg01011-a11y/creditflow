@@ -1,12 +1,14 @@
-# CreditFlow Shopify App Store listing draft
+# Pikmora Perks Shopify App Store listing draft
 
 Status: draft for product and policy review; not published.
 
 ## Positioning
 
+**Pikmora Perks — Rewards. Retention. Repeat.**
+
 **Shopify Native Store Credit rewards with refund-aware automation.**
 
-CreditFlow helps merchants set order-based cashback rules, issue Shopify Native Store Credit, reverse rewards when orders are refunded, and send branded transactional emails. Merchants can preview rules and review processing activity before they depend on an automation.
+Pikmora Perks helps merchants set order-based cashback rules, issue Shopify Native Store Credit, reverse rewards when orders are refunded, and send branded transactional emails. Merchants can preview rules and review processing activity before they depend on an automation.
 
 ## Short description
 

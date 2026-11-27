@@ -56,7 +56,7 @@ export default function BillingPage() {
           <a className="cf-billing-button" href={data.pricingUrl} target="_top" rel="noreferrer">View or change plan in Shopify</a>
         </section>
         {data.billingError ? <div className="cf-billing-error">Shopify could not refresh your plan and usage totals. Your Store Credit automation continues to work. You can still manage your subscription in Shopify; check this page again later for updated billing details.</div> : null}
-        {!billing?.configured && !data.billingError ? <div className="cf-billing-error">Plan status and usage reporting are not connected in this environment. Your Store Credit automation continues to work. You can still choose or change a plan in Shopify; contact CreditFlow support if billing details do not appear after the connection is restored.</div> : null}
+        {!billing?.configured && !data.billingError ? <div className="cf-billing-error">Plan status and usage reporting are not connected in this environment. Your Store Credit automation continues to work. You can still choose or change a plan in Shopify; contact Pikmora Perks support if billing details do not appear after the connection is restored.</div> : null}
         <section className="cf-billing-card"><h2>Current billing cycle</h2><div className="cf-billing-grid">
           <div className="cf-billing-stat"><span>Plan price</span><strong>{billing?.monthlyPrice == null ? "—" : "$" + billing.monthlyPrice.toFixed(2) + "/mo"}</strong></div>
           <div className="cf-billing-stat"><span>Included orders</span><strong>{billing?.unlimited ? "Unlimited" : billing?.includedOrders?.toLocaleString() ?? "—"}</strong></div>
@@ -67,17 +67,17 @@ export default function BillingPage() {
         {data.billingError || !billing?.configured
           ? <div className="cf-billing-note">Plan-specific usage cannot be confirmed here. Shopify Native Store Credit automation continues to work; check the billing connection before relying on usage totals.</div>
           : billing.plan === "business"
-            ? <div className="cf-billing-note">Business includes unlimited order processing. CreditFlow never submits per-order overage events for this plan.</div>
+            ? <div className="cf-billing-note">Business includes unlimited order processing. Pikmora Perks never submits per-order overage events for this plan.</div>
             : billing.isTrial
               ? <div className="cf-billing-note">Orders evaluated during the trial are not sent as billable usage events. Shopify applies the configured usage meter after the trial ends.</div>
               : ["starter", "growth", "professional"].includes(billing.plan) && billing.active
                 ? <div className="cf-billing-note">This plan is designed to include {billing.includedOrders?.toLocaleString()} evaluated orders, then charge $0.10 for each additional order through Shopify App Pricing. The live meter is configured in Shopify’s Partner Dashboard; final charges appear on the Shopify invoice.</div>
                 : billing.active
-                  ? <div className="cf-billing-note">Shopify returned a plan that CreditFlow does not recognize. Usage events are paused for review; contact CreditFlow support.</div>
+                  ? <div className="cf-billing-note">Shopify returned a plan that Pikmora Perks does not recognize. Usage events are paused for review; contact Pikmora Perks support.</div>
                   : <div className="cf-billing-note">Starter access remains available while no subscription is active. Select the Starter plan in Shopify to enable its 100 included orders and $0.10 overage meter. Until selected, no usage charges are submitted.</div>}
         </section>
-        <section className="cf-billing-card"><h2>CreditFlow plans</h2><div className="cf-plan-grid">{data.plans.map((plan) => <article className="cf-plan" key={plan.handle}><strong>{plan.name}</strong><div className="cf-plan-price">${plan.monthlyPrice.toFixed(2)}<small>/month</small></div><p>{plan.unlimited ? "Unlimited orders · no usage overage" : plan.includedOrders?.toLocaleString() + " orders included · $0.10 per additional order"}</p><p>{plan.trialDays ? "14-day free trial" : "Free forever"}</p><p>{plan.brandedEmails ? "Branded emails and expiry reminders" : "Shopify-native notifications"}</p></article>)}</div></section>
-        <div className="cf-billing-note">Usage is one distinct, fully fulfilled Shopify order evaluated by CreditFlow, whether or not a reward is issued. Duplicate webhook deliveries and worker retries do not add another unit. Refunds do not erase processed usage. CreditFlow reports usage to Shopify; Shopify validates events, applies the configured meter and bills the final amount. App Events payloads contain no customer or order details.</div>
+        <section className="cf-billing-card"><h2>Pikmora Perks plans</h2><div className="cf-plan-grid">{data.plans.map((plan) => <article className="cf-plan" key={plan.handle}><strong>{plan.name}</strong><div className="cf-plan-price">${plan.monthlyPrice.toFixed(2)}<small>/month</small></div><p>{plan.unlimited ? "Unlimited orders · no usage overage" : plan.includedOrders?.toLocaleString() + " orders included · $0.10 per additional order"}</p><p>{plan.trialDays ? "14-day free trial" : "Free forever"}</p><p>{plan.brandedEmails ? "Branded emails and expiry reminders" : "Shopify-native notifications"}</p></article>)}</div></section>
+        <div className="cf-billing-note">Usage is one distinct, fully fulfilled Shopify order evaluated by Pikmora Perks, whether or not a reward is issued. Duplicate webhook deliveries and worker retries do not add another unit. Refunds do not erase processed usage. Pikmora Perks reports usage to Shopify; Shopify validates events, applies the configured meter and bills the final amount. App Events payloads contain no customer or order details.</div>
       </div>
     </s-page>
   );

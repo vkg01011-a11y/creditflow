@@ -31,7 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     billing = await getBillingStatus(admin, shop);
   } catch {
-    return Response.json({ error: "CreditFlow could not verify the current plan. Save settings and try again later." }, { status: 503 });
+    return Response.json({ error: "Pikmora Perks could not verify the current plan. Save settings and try again later." }, { status: 503 });
   }
   if (!billing.emailEntitled) {
     return Response.json({ error: "Branded email previews can be sent on Professional and Business plans." }, { status: 403 });

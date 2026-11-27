@@ -79,7 +79,7 @@ export default function SetupPage() {
       ? "Shopify's native store-credit notification is selected. This is the default and requires no extra email provider setup."
       : data.emailMode === "CREDITFLOW_CUSTOM"
         ? data.customEmailProviderReady
-          ? "CreditFlow customer emails are selected and the email provider is configured."
+          ? "Pikmora Perks customer emails are selected and the email provider is configured."
           : "Custom emails are selected, but the hosting email provider is not configured yet. Use Shopify's native notification until this is ready."
         : "Customer notifications are currently disabled. Review this choice before enabling rewards.";
 
@@ -296,7 +296,7 @@ export default function SetupPage() {
         <section className="cfs-hero">
           <div className="cfs-hero-copy">
             <div className="cfs-eyebrow">A simple starting point</div>
-            <h1 className="cfs-title">Get CreditFlow ready</h1>
+            <h1 className="cfs-title">Get Pikmora Perks ready</h1>
             <p className="cfs-lead">
               Set up when customers earn store credit, choose how they hear about it,
               and switch rewards on only when you are comfortable. Your Shopify store
@@ -456,7 +456,7 @@ export default function SetupPage() {
         </section>
 
         <p className="cfs-note">
-          Important: CreditFlow manages reward rules and records. Shopify remains the
+          Important: Pikmora Perks manages reward rules and records. Shopify remains the
           authoritative source for each customer&apos;s available store credit balance.
           This guide never activates a rule or issues credit.
         </p>

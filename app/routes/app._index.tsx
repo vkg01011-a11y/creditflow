@@ -199,7 +199,7 @@ export default function Dashboard() {
   const reversedWidth = reversed > 0 ? Math.max(3, (reversed / maxActivity) * 100) : 0;
 
   return (
-    <s-page heading="CreditFlow">
+    <s-page heading="Overview">
       <div className="cf-dashboard cf-dashboard--refined">
         <style>{`
           .cf-dashboard--refined {
@@ -729,7 +729,7 @@ export default function Dashboard() {
             <div>
               <h3 className="cf-source-title">Your customers’ balances stay in Shopify.</h3>
               <p className="cf-source-copy">
-                CreditFlow keeps the rules, grant metadata and transaction history in sync.
+                Pikmora Perks keeps the rules, grant metadata and transaction history in sync.
                 Shopify remains the authoritative source for available store credit balances.
               </p>
             </div>
@@ -743,14 +743,14 @@ export default function Dashboard() {
           <div className="cf-transactions-head">
             <div>
               <h2 className="cf-panel-title">Recent transactions</h2>
-              <p className="cf-panel-description">Latest credit activity recorded by CreditFlow</p>
+              <p className="cf-panel-description">Latest credit activity recorded by Pikmora Perks</p>
             </div>
             <span className="cf-transactions-count">{data.recentTransactions.length} of 8 records</span>
           </div>
 
           {data.recentTransactions.length === 0 ? (
             <div className="cf-empty">
-              No transactions have been recorded yet. Credit activity will appear here as your store starts using CreditFlow.
+              No transactions have been recorded yet. Credit activity will appear here as your store starts using Pikmora Perks.
             </div>
           ) : (
             <div className="cf-table-wrap">
@@ -789,7 +789,7 @@ export default function Dashboard() {
         </section>
 
         <p className="cf-footnote">
-          Issued and reversed totals reflect CreditFlow transaction records. They are not available balances. Redemption and expiry totals are not included because the current app records do not provide a complete Shopify transaction feed for those events. Queue attention counts are records and may refer to the same incident across more than one queue.
+          Issued and reversed totals reflect Pikmora Perks transaction records. They are not available balances. Redemption and expiry totals are not included because the current app records do not provide a complete Shopify transaction feed for those events. Queue attention counts are records and may refer to the same incident across more than one queue.
         </p>
       </div>
     </s-page>

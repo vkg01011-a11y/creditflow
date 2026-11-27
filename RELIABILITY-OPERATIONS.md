@@ -1,4 +1,4 @@
-# CreditFlow reliability worker
+# Pikmora Perks reliability worker
 
 ## What this adds
 
@@ -10,7 +10,7 @@
 - Fulfillment retry scheduling reuses \`WebhookEventStatus.RECEIVED\` with a future \`nextAttemptAt\`, so no new PostgreSQL enum value is required.
 - Fulfillment errors are automatically retried only when no \`CreditGrant\` exists for the order. If a grant exists without a confirmed outcome, the event is moved to \`REVIEW_REQUIRED\`; the worker never blindly repeats a potentially successful Store Credit mutation.
 - Customer data requests create a merchant-authenticated JSON export at \`/api/privacy-requests\` and are also visible in the embedded app's Privacy requests page.
-- Customer redaction pseudonymizes CreditFlow customer/order references with HMAC, clears linked metadata, removes notifications and prior exports, and preserves transaction values needed for financial history. Pseudonymized information may still be personal data under applicable law and must be handled accordingly.
+- Customer redaction pseudonymizes Pikmora Perks customer/order references with HMAC, clears linked metadata, removes notifications and prior exports, and preserves transaction values needed for financial history. Pseudonymized information may still be personal data under applicable law and must be handled accordingly.
 - Shop redaction removes the shop's app records and stored sessions.
 
 ## Required environment variables
@@ -38,7 +38,7 @@ The server clamps the batch size to 1–10 for each queue. Monitor the scheduler
 
 ## Privacy export access
 
-Open **Privacy requests** in the embedded CreditFlow app. Completed customer data requests provide a JSON export. The authenticated API also supports:
+Open **Privacy requests** in the embedded Pikmora Perks app. Completed customer data requests provide a JSON export. The authenticated API also supports:
 
 \`GET /api/privacy-requests\`
 
@@ -69,9 +69,9 @@ This change adds the durable queues and a protected HTTP worker endpoint; it doe
 - The worker reconciles each refund against cashback grants for the same order. Newly issued grants store the original reward basis.
 - Partial cashback reversals are calculated proportionally from refunded merchandise line subtotals. Cumulative refunds and cashback debits are capped at the original reward basis and grant.
 - Product-filtered reward rules use refunded product IDs to identify eligible refunded items.
-- A unique reversal reservation is committed before calling Shopify's native \`storeCreditAccountDebit\` mutation. The Shopify transaction ID is then recorded in CreditFlow's reversal and debit ledger.
+- A unique reversal reservation is committed before calling Shopify's native \`storeCreditAccountDebit\` mutation. The Shopify transaction ID is then recorded in the app's reversal and debit ledger.
 - Duplicate refund deliveries reuse the same \`shop + refund GID + grant\` record and do not issue a second debit.
-- Insufficient store credit, old grants without a saved reward basis, missing product/currency data, and ambiguous debit outcomes move to \`REVIEW_REQUIRED\`. CreditFlow does not automatically retry an uncertain debit.
+- Insufficient store credit, old grants without a saved reward basis, missing product/currency data, and ambiguous debit outcomes move to \`REVIEW_REQUIRED\`. Pikmora Perks does not automatically retry an uncertain debit.
 - Review records under **Refund reversals** in the embedded app. Inspect Shopify's customer store-credit transaction history before any manual adjustment.
 - Existing grants created before the reward-basis migration have a null basis and require manual review for refunds.
 - New automation rules are created paused by default; merchants must review and activate them deliberately.
@@ -88,11 +88,11 @@ This change adds the durable queues and a protected HTTP worker endpoint; it doe
 
 ## Customer credit email notifications
 
-- The merchant chooses one credit-issued email mode: Shopify native, CreditFlow branded, or disabled. Native and branded issue emails are mutually exclusive.
-- Shopify native mode passes the Store Credit mutation's `notify` flag; Shopify owns its template and delivery. CreditFlow branded mode sets Shopify `notify: false` and queues a Resend email after the credit transaction and CreditFlow records are persisted.
+- The merchant chooses one credit-issued email mode: Shopify native, Pikmora Perks branded, or disabled. Native and branded issue emails are mutually exclusive.
+- Shopify native mode passes the Store Credit mutation's `notify` flag; Shopify owns its template and delivery. Pikmora Perks branded mode sets Shopify `notify: false` and queues a Resend email after the credit transaction and Pikmora Perks records are persisted.
 - The merchant configures the custom email design in **Customer emails**. Template values are escaped before HTML insertion; merchant-authored raw HTML is not executed.
 - Expiry reminders are opt-in and can be set for 7, 3, and/or 1 day before expiry.
-- The scheduler only queues reminder candidates based on stored expiry metadata. Immediately before delivery, CreditFlow fetches the exact Shopify Store Credit credit transaction by its GraphQL ID and checks Shopify's `expiresAt` and `remainingAmount`.
+- The scheduler only queues reminder candidates based on stored expiry metadata. Immediately before delivery, Pikmora Perks fetches the exact Shopify Store Credit credit transaction by its GraphQL ID and checks Shopify's `expiresAt` and `remainingAmount`.
 - A fully spent, expired, or no-longer-expiring transaction is skipped. A stable Resend `Idempotency-Key` is used for retries after uncertain network outcomes.
 - Email notifications share the durable queue, lease, retry, and operations monitoring. The Operations page exposes QUEUED, PROCESSING, SENT, SKIPPED, and FAILED counts, and delivery errors for intervention.
 - When customer or shop redaction is pending or failed, customer email jobs and expiry scans are held for the affected shop. Privacy work takes precedence over outbound notifications.

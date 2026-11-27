@@ -1,4 +1,4 @@
-# CreditFlow performance and scaling optimization
+# Pikmora Perks performance and scaling optimization
 
 ## Development HAR baseline
 

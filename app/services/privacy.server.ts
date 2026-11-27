@@ -324,7 +324,7 @@ export async function processCustomerDataRequest({
     customerGid,
     requestedOrderIds: normalized.requestedOrderIds,
     storedDataDescription:
-      "CreditFlow stores Shopify customer and order identifiers, reward grant and transaction metadata, automation evaluation history, notification metadata, audit records, amounts, currencies, statuses, and timestamps. Shopify remains the authoritative store-credit balance.",
+      "Pikmora Perks stores Shopify customer and order identifiers, reward grant and transaction metadata, automation evaluation history, notification metadata, audit records, amounts, currencies, statuses, and timestamps. Shopify remains the authoritative store-credit balance.",
     grants: grants.map((grant) => ({
       ...grant,
       amount: grant.amount.toString(),

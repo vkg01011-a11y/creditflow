@@ -1,10 +1,12 @@
-# CreditFlow
+# Pikmora Perks
 
-CreditFlow is an embedded Shopify app for rule-based cashback rewards using **Shopify's native Store Credit**.
+Pikmora Perks is an embedded Shopify app for rule-based cashback rewards using **Shopify's native Store Credit**.
+
+**Rewards. Retention. Repeat.**
 
 ## Product principle
 
-Shopify is the authoritative source for customer Store Credit balances and transactions. CreditFlow stores reward rules, grant/reversal metadata, idempotency keys, webhook inbox records, audit information, and reporting data. It is not a second wallet.
+Shopify is the authoritative source for customer Store Credit balances and transactions. Pikmora Perks stores reward rules, grant/reversal metadata, idempotency keys, webhook inbox records, audit information, and reporting data. It is not a second wallet.
 
 ## Current capabilities
 
@@ -138,17 +140,17 @@ Open **Customer emails** in the embedded app at `/app/notifications`.
 
 Credit-issued notifications have three mutually exclusive modes:
 
-- **Shopify native email** (default): CreditFlow passes Shopify's `notify: true` flag when issuing the Store Credit. Shopify sends its standard store-credit notification. Edit that message in Shopify Admin → Settings → Notifications.
-- **CreditFlow branded email**: Shopify's native email is disabled for that credit grant and CreditFlow queues one custom transactional email through Resend. Merchants can configure sender display name, reply-to, logo, accent colour, subject, headline, message, CTA label, and footer.
+- **Shopify native email** (default): Pikmora Perks passes Shopify's `notify: true` flag when issuing the Store Credit. Shopify sends its standard store-credit notification. Edit that message in Shopify Admin → Settings → Notifications.
+- **Pikmora Perks branded email**: Shopify's native email is disabled for that credit grant and Pikmora Perks queues one custom transactional email through Resend. Merchants can configure sender display name, reply-to, logo, accent colour, subject, headline, message, CTA label, and footer.
 - **Disabled**: the credit is still issued, but no issue email is sent.
 
-Expiry reminders are a separate opt-in. Merchants choose reminders 7, 3, and/or 1 day before the expiry date. CreditFlow fetches the exact Shopify credit transaction immediately before sending and suppresses the reminder if the transaction has no expiry or its remaining amount is zero. The Operations page tracks queued, sent, skipped, and failed email notifications.
+Expiry reminders are a separate opt-in. Merchants choose reminders 7, 3, and/or 1 day before the expiry date. Pikmora Perks fetches the exact Shopify credit transaction immediately before sending and suppresses the reminder if the transaction has no expiry or its remaining amount is zero. The Operations page tracks queued, sent, skipped, and failed email notifications.
 
-Before enabling CreditFlow-branded delivery or expiry reminders:
+Before enabling Pikmora Perks-branded delivery or expiry reminders:
 
 1. Create a Resend account and verify a sending domain by adding the DNS records Resend provides.
 2. Set `RESEND_API_KEY` in the private hosting secret manager.
-3. Set `CREDITFLOW_EMAIL_FROM` to a sender address on that verified domain, for example `CreditFlow Rewards <rewards@your-domain.com>`.
+3. Set `CREDITFLOW_EMAIL_FROM` to a sender address on that verified domain, for example `Pikmora Perks Rewards <rewards@your-domain.com>`.
 4. Confirm the app has `read_store_credit_accounts` and `read_store_credit_account_transactions` scopes. Stores may need to reauthorize after the scope change.
 5. Save the email design in **Customer emails** and enable the required mode.
 
@@ -157,7 +159,7 @@ Template tokens:
 - Issued credit: `{{ shop_name }}`, `{{ customer_first_name }}`, `{{ credit_amount }}`.
 - Expiry reminder: `{{ shop_name }}`, `{{ customer_first_name }}`, `{{ remaining_amount }}`, `{{ expiry_date }}`.
 
-These are transactional store-credit notifications, not marketing subscriptions. CreditFlow does not send both Shopify's native issue email and its own branded issue email for the same grant.
+These are transactional store-credit notifications, not marketing subscriptions. Pikmora Perks does not send both Shopify's native issue email and its own branded issue email for the same grant.
 
 ## Container deployment
 
@@ -210,17 +212,17 @@ See [PRODUCT-READINESS.md](./PRODUCT-READINESS.md), [RELIABILITY-OPERATIONS.md](
 
 ## Pricing and Shopify App Pricing
 
-CreditFlow's current plans are Starter $0/month with 100 evaluated orders then $0.10 per additional order; Growth $9/month with 300 included then $0.10/order; Professional $19/month with 1,000 included then $0.10/order; and Business $49/month with unlimited orders and no overage. Growth, Professional, and Business have 14-day trials. Starter is free forever with no trial. Prices are USD/month.
+The current plans are Starter $0/month with 100 evaluated orders then $0.10 per additional order; Growth $9/month with 300 included then $0.10/order; Professional $19/month with 1,000 included then $0.10/order; and Business $49/month with unlimited orders and no overage. Growth, Professional, and Business have 14-day trials. Starter is free forever with no trial. Prices are USD/month.
 
 Shopify Partner Dashboard must define the recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, and `business_plan`. Configure the `orders_processed` meter as graduated pricing: Starter 1–100 orders at $0.00/order, then 101+ at $0.10/order; Growth 1–300 at $0.00, then 301+ at $0.10; Professional 1–1,000 at $0.00, then 1,001+ at $0.10. Do not configure a meter on Business. The three paid plans each have a 14-day trial. These Partner Dashboard values are not created by application code.
 
 Set private environment values `SHOPIFY_PARTNER_ID` (use the numeric Partner ID in the Partner Dashboard URL, not the separate Dev Dashboard organization ID), `SHOPIFY_PARTNER_API_ACCESS_TOKEN` (Manage apps permission), `SHOPIFY_APP_GID`, `SHOPIFY_PARTNER_API_VERSION` (default `2026-10`), `SHOPIFY_APP_EVENTS_API_VERSION` (default `2026-10`), and `SHOPIFY_APP_HANDLE` (staging default `creditflow-1`; set the handle for the relevant Shopify app listing). Existing `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` are used for App Events token exchange. Do not commit these secrets.
 
-One usage unit is reserved once per distinct, fully fulfilled Shopify order that CreditFlow evaluates with customer and currency fields present, even when no reward rule matches or credit is issued. CreditFlow uses Shopify’s original webhook trigger timestamp (falling back to recorded receipt time for older events), so delayed worker processing does not move usage into the wrong billing cycle. Duplicate webhook deliveries and retries do not add a unit. Refunds do not erase an evaluated order. Trial, Business, and confirmed no-active-plan orders are not sent as billable events. If the Partner API is unavailable, the subscription is unrecognized, or Shopify does not provide a valid cycle, CreditFlow records a `REVIEW_REQUIRED` usage row and continues Store Credit automation; it never guesses a plan or charges automatically. Pending events are revalidated immediately before sending. A plan, trial, or billing-cycle change moves the event to review rather than silently dropping or submitting it. Transient App Events failures retry with the same stable key; an exhausted/uncertain delivery needs manual reconciliation. App Events payloads contain only the shop ID, timestamp, hashed idempotency key, meter handle, and quantity; no customer or order details. A successful HTTP 202 confirms event receipt, not final billing validation; inspect Shopify Dev Dashboard → App Billing Events.
+One usage unit is reserved once per distinct, fully fulfilled Shopify order that Pikmora Perks evaluates with customer and currency fields present, even when no reward rule matches or credit is issued. Pikmora Perks uses Shopify’s original webhook trigger timestamp (falling back to recorded receipt time for older events), so delayed worker processing does not move usage into the wrong billing cycle. Duplicate webhook deliveries and retries do not add a unit. Refunds do not erase an evaluated order. Trial, Business, and confirmed no-active-plan orders are not sent as billable events. If the Partner API is unavailable, the subscription is unrecognized, or Shopify does not provide a valid cycle, Pikmora Perks records a `REVIEW_REQUIRED` usage row and continues Store Credit automation; it never guesses a plan or charges automatically. Pending events are revalidated immediately before sending. A plan, trial, or billing-cycle change moves the event to review rather than silently dropping or submitting it. Transient App Events failures retry with the same stable key; an exhausted/uncertain delivery needs manual reconciliation. App Events payloads contain only the shop ID, timestamp, hashed idempotency key, meter handle, and quantity; no customer or order details. A successful HTTP 202 confirms event receipt, not final billing validation; inspect Shopify Dev Dashboard → App Billing Events.
 
 The **Plan & usage** page keeps Shopify-hosted plan management available during billing-status outages and explains that totals may be unavailable. **Operations** shows billing queue counts and waiting/review items without exposing customer or order identifiers. Do not manually resubmit an uncertain event until its outcome has been checked in Shopify Dev Dashboard → App Billing Events.
 
-Core rewards, Store Credit accuracy, refund safety, and privacy workflows remain available on Starter. CreditFlow-branded emails and expiry reminders require Professional or Business and are checked again at delivery time.
+Core rewards, Store Credit accuracy, refund safety, and privacy workflows remain available on Starter. Pikmora Perks-branded emails and expiry reminders require Professional or Business and are checked again at delivery time.
 
 
 Plan selection return URL: configure each public plan's Shopify App Pricing welcome link to return to `/app/billing`. The app keeps this route accessible without a subscription so merchants can select or change a plan; all other app routes redirect to Shopify's hosted pricing page once Partner API configuration is active.

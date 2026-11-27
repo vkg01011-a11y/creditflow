@@ -110,14 +110,14 @@ function formatExpiryDate(value: string, timezone?: string | null) {
 function senderAddress(storeName: string, senderName?: string | null) {
   const configured = process.env.CREDITFLOW_EMAIL_FROM?.trim();
   if (!configured) {
-    throw new Error("CreditFlow email sender is not configured.");
+    throw new Error("Pikmora Perks email sender is not configured.");
   }
 
   const match = configured.match(/<([^<>]+)>/);
   const address = match?.[1]?.trim() ?? configured;
 
   if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(address)) {
-    throw new Error("CreditFlow email sender address is invalid.");
+    throw new Error("Pikmora Perks email sender address is invalid.");
   }
 
   const name = (senderName?.trim() || storeName || "Store credit")

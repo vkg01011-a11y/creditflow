@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS: Settings = {
   senderName: "",
   replyToEmail: "",
   logoUrl: "",
-  accentColor: "#176B5B",
+  accentColor: "#5B21B6",
   issuedSubject: "A little something for your next order",
   issuedHeadline: "You've got store credit!",
   issuedMessage: DEFAULT_ISSUED_MESSAGE,
@@ -189,7 +189,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (issuedEmailMode === "CREDITFLOW_CUSTOM" || expiryReminderEnabled) {
       const billing = await getBillingStatus(admin, shop, true);
       if (!billing.emailEntitled) {
-        throw new Error("CreditFlow-branded emails and expiry reminders require the Professional ($19/month) or Business ($49/month) plan. Choose a plan in Plan & usage.");
+        throw new Error("Pikmora Perks-branded emails and expiry reminders require the Professional ($19/month) or Business ($49/month) plan. Choose a plan in Plan & usage.");
       }
     }
 
@@ -217,7 +217,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       (!process.env.RESEND_API_KEY || !process.env.CREDITFLOW_EMAIL_FROM)
     ) {
       throw new Error(
-        "CreditFlow email delivery is not configured yet. Add RESEND_API_KEY and CREDITFLOW_EMAIL_FROM to the hosting environment first.",
+        "Pikmora Perks email delivery is not configured yet. Add RESEND_API_KEY and CREDITFLOW_EMAIL_FROM to the hosting environment first.",
       );
     }
 
@@ -388,12 +388,12 @@ export default function NotificationsPage() {
 
         {!data.emailProviderConfigured ? (
           <div className="cfe-alert cfe-alert--error">
-            Branded email delivery is not configured yet. Add a Resend API key and a sender address on a verified domain in the hosting environment before enabling CreditFlow-branded emails.
+            Branded email delivery is not configured yet. Add a Resend API key and a sender address on a verified domain in the hosting environment before enabling Pikmora Perks-branded emails.
           </div>
         ) : (
           <div className="cfe-notice">
             <span className="cfe-status cfe-status--ok">Email provider configured</span>
-            <span> Resend is available for CreditFlow-branded delivery. The sending domain must remain verified.</span>
+            <span> Resend is available for Pikmora Perks-branded delivery. The sending domain must remain verified.</span>
           </div>
         )}
 
@@ -403,7 +403,7 @@ export default function NotificationsPage() {
         {!data.customEmailEntitled ? (
           <div className="cfe-notice">
             <strong>Premium email features are locked on {data.currentPlanName}.</strong>
-            <span> CreditFlow-branded issue emails and expiry reminders are included with Professional ($19/month) and Business ($49/month).</span>
+            <span> Pikmora Perks-branded issue emails and expiry reminders are included with Professional ($19/month) and Business ($49/month).</span>
             {" "}<a href={data.billingUrl} target="_top" rel="noreferrer">View plans</a>
           </div>
         ) : null}
@@ -428,7 +428,7 @@ export default function NotificationsPage() {
                   />
                   <span><strong>Shopify native email</strong><br /><span className="cfe-hint">Shopify sends its standard store-credit email. Customize its template in Shopify Admin → Settings → Notifications.</span></span>
                 </label>
-                <label htmlFor="issued-email-mode-creditflow" aria-label="CreditFlow branded email">
+                <label htmlFor="issued-email-mode-creditflow" aria-label="Pikmora Perks branded email">
                   <input
                     id="issued-email-mode-creditflow"
                     type="radio"
@@ -438,7 +438,7 @@ export default function NotificationsPage() {
                     checked={settings.issuedEmailMode === "CREDITFLOW_CUSTOM"}
                     onChange={() => update("issuedEmailMode", "CREDITFLOW_CUSTOM")}
                   />
-                  <span><strong>CreditFlow branded email</strong><br /><span className="cfe-hint">CreditFlow sends the custom design shown in the preview. Shopify&apos;s native email is disabled for this grant to prevent duplicates.</span></span>
+                  <span><strong>Pikmora Perks branded email</strong><br /><span className="cfe-hint">Pikmora Perks sends the custom design shown in the preview. Shopify&apos;s native email is disabled for this grant to prevent duplicates.</span></span>
                 </label>
                 <label htmlFor="issued-email-mode-disabled" aria-label="Disable credit-issued email">
                   <input
@@ -487,7 +487,7 @@ export default function NotificationsPage() {
                 />
                 <strong style={{fontSize:13}}>Send store-credit expiry reminders</strong>
               </div>
-              <p>CreditFlow checks Shopify&apos;s actual remaining amount before sending. Reminders are not sent when the credit has already been fully spent.</p>
+              <p>Pikmora Perks checks Shopify&apos;s actual remaining amount before sending. Reminders are not sent when the credit has already been fully spent.</p>
               <div className="cfe-checks">
                 {days.map((day) => (
                   <label key={day}>
