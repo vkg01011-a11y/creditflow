@@ -1,0 +1,91 @@
+name: CreditFlow validation
+
+on:
+  push:
+    branches:
+      - feature/reliability-webhook-queue
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: creditflow-validation-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate schema, tests, types, lint and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: creditflow_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d creditflow_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/creditflow_ci?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/creditflow_shadow?schema=public
+      SHOPIFY_API_KEY: creditflow-ci-placeholder
+      SHOPIFY_API_SECRET: creditflow-ci-placeholder
+      SHOPIFY_APP_URL: https://example.com
+      SCOPES: read_orders,read_customers,read_products,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Render Blueprint YAML
+        run: ruby -e "require 'yaml'; YAML.load_file('render.yaml')"
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Create a separate Prisma shadow database
+        run: PGPASSWORD=postgres createdb --host=localhost --username=postgres creditflow_shadow
+
+      - name: Apply all migrations to a clean PostgreSQL database
+        run: npx prisma migrate deploy
+
+      - name: Verify permanent automation deletion preserves financial history
+        env:
+          CREDITFLOW_RUN_DB_TESTS: "1"
+        run: node --test tests/automation-rule-delete.integration.test.mjs
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Build production container
+        run: docker build --tag creditflow:ci .

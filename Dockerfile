@@ -1,18 +1,26 @@
-FROM node:22-alpine
-RUN apk add --no-cache openssl
-
-EXPOSE 3000
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-ENV NODE_ENV=production
+# Prisma's Linux query engine needs OpenSSL libraries. Install them explicitly
+# so Prisma can select the correct engine target instead of guessing.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json* ./
-
-RUN npm ci --omit=dev && npm cache clean --force
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 
+RUN npx prisma generate
 RUN npm run build
 
-CMD ["npm", "run", "docker-start"]
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+# Database migrations run as a one-off release/pre-deploy command:
+# npm run setup
+CMD ["npm", "run", "start"]

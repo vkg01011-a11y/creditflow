@@ -30,9 +30,17 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <div className={styles.brand}>
+          <img className={styles.brandIcon} src="/branding/pikmora-perks.png" alt="" width="64" height="64" />
+          <span className={styles.brandCopy}>
+            <span className={styles.brandParent}>Pikmora · PP</span>
+            <strong className={styles.brandName}>Pikmora Perks</strong>
+            <span className={styles.brandTagline}>Rewards. Retention. Repeat.</span>
+          </span>
+        </div>
+        <h1 className={styles.heading}>Store credit rewards built for Shopify</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Set clear cashback rules, keep customers informed and handle refunds with confidence. Shopify remains in control of every customer’s store credit balance.
         </p>
         {showForm && (
           <Form className={styles.form} method="post">
@@ -48,16 +56,13 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Flexible reward rules</strong>. Set eligibility and reward amounts without code, then preview a rule before activating it.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Shopify Native Store Credit</strong>. Pikmora Perks records reward and reversal metadata; it does not create a competing wallet.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Clear operations</strong>. Review order evaluations, refund reversals, customer emails and work that needs reconciliation.
           </li>
         </ul>
       </div>

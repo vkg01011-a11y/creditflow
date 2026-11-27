@@ -1,15 +1,18 @@
 import { Prisma } from "@prisma/client";
 import type { CreditGrant, PrismaClient } from "@prisma/client";
 import type { authenticate } from "../shopify.server";
+import { getBillingStatus } from "./billing.server";
 
 import {
   calculateEligibleLineSubtotal,
   calculateReward,
-  matchesRuleConditions,
+  evaluateRuleConditions,
 } from "../domain/reward-engine.mjs";
-import type {
-  RewardConditionGroup,
-} from "../domain/reward-engine.mjs";
+import { createAutomationRuleSnapshot } from "../domain/automation-rule-snapshot.mjs";
+import {
+  buildAutomationExecutionKey,
+  classifyAutomationExecution,
+} from "../domain/automation-execution.mjs";
 
 type ShopifyAdmin = NonNullable<
   Awaited<ReturnType<typeof authenticate.webhook>>["admin"]
@@ -66,6 +69,7 @@ type StoreCreditMutationResponse = {
     storeCreditAccountCredit?: {
       storeCreditAccountTransaction?: {
         id: string;
+        account?: { id: string } | null;
       } | null;
       userErrors?: GraphqlError[];
     } | null;
@@ -120,7 +124,7 @@ async function issueNativeStoreCredit(
     expiresAt?: string;
     notifyCustomer?: boolean;
   },
-): Promise<{ id: string }> {
+): Promise<{ id: string; accountId: string }> {
   // Passing the customer ID allows Shopify to create the currency-specific
   // Store Credit account when the customer does not already have one.
   const creditResponse = await admin.graphql(
@@ -132,6 +136,9 @@ async function issueNativeStoreCredit(
         storeCreditAccountCredit(id: $customerId, creditInput: $creditInput) {
           storeCreditAccountTransaction {
             id
+            account {
+              id
+            }
           }
           userErrors {
             message
@@ -156,19 +163,20 @@ async function issueNativeStoreCredit(
   const graphqlErrors = creditBody.errors ?? [];
   const userErrors = payload?.userErrors ?? [];
   const transactionId = payload?.storeCreditAccountTransaction?.id;
+  const accountId = payload?.storeCreditAccountTransaction?.account?.id;
 
-  if (graphqlErrors.length > 0 || userErrors.length > 0 || !transactionId) {
+  if (graphqlErrors.length > 0 || userErrors.length > 0 || !transactionId || !accountId) {
     const messages = [...graphqlErrors, ...userErrors]
       .map((item) => item.message)
       .filter((message): message is string => Boolean(message));
 
     throw createProcessingError(
-      messages.join("; ") || "Shopify did not return a store credit transaction.",
-      graphqlErrors.length > 0 || userErrors.length > 0,
+      messages.join("; ") || "Shopify did not return a store credit transaction and account reference.",
+      graphqlErrors.length === 0 && userErrors.length > 0,
     );
   }
 
-  return { id: transactionId };
+  return { id: transactionId, accountId };
 }
 
 type PaymentStatus = "PREPAID" | "COD" | "UNKNOWN";
@@ -189,16 +197,15 @@ function resolvePaymentStatus(order: ShopifyFulfilledOrder): PaymentStatus {
 }
 
 function hasCustomerConditions(conditions: unknown): boolean {
-  if (!isRecord(conditions) || !Array.isArray(conditions.rules)) {
-    return false;
-  }
-
-  return conditions.rules.some(
+  if (!isRecord(conditions)) return false;
+  const rules = Array.isArray(conditions.rules) ? conditions.rules : [];
+  const groups = Array.isArray(conditions.groups) ? conditions.groups : [];
+  return rules.some(
     (condition: unknown) =>
       isRecord(condition) &&
       typeof condition.field === "string" &&
       condition.field.startsWith("CUSTOMER_"),
-  );
+  ) || groups.some((group: unknown) => hasCustomerConditions(group));
 }
 
 async function loadCustomerConditionData(
@@ -307,6 +314,47 @@ export async function processFulfilledOrder({
   });
 
   if (rules.length === 0) {
+    const executionKey = buildAutomationExecutionKey(shop, orderGid, null);
+    const now = new Date();
+
+    // A delayed webhook may be retried after the merchant has paused or
+    // deleted its last active rule. Close older pending evaluations explicitly.
+    await db.automationExecution.updateMany({
+      where: {
+        shop,
+        orderGid,
+        status: { in: ["PROCESSING", "RETRY_PENDING"] },
+      },
+      data: {
+        status: "SKIPPED",
+        reason: "NO_ACTIVE_RULES_AT_RETRY",
+        errorMessage: null,
+        completedAt: now,
+      },
+    });
+
+    await db.automationExecution.upsert({
+      where: { executionKey },
+      create: {
+        shop,
+        executionKey,
+        orderGid,
+        orderName: order.name ?? null,
+        ruleNameSnapshot: "No active automation",
+        trigger: "ORDER_FULFILLED",
+        status: "SKIPPED",
+        reason: "NO_ACTIVE_REWARD_RULES",
+        currencyCode,
+        completedAt: now,
+      },
+      update: {
+        status: "SKIPPED",
+        reason: "NO_ACTIVE_REWARD_RULES",
+        evaluatedAt: now,
+        completedAt: now,
+        attemptCount: { increment: 1 },
+      },
+    });
     return { status: "SKIPPED", reason: "NO_ACTIVE_REWARD_RULES" } as const;
   }
 
@@ -362,49 +410,136 @@ export async function processFulfilledOrder({
       throw new Error(`Automation rule ${rule.id} has invalid productIds JSON.`);
     }
 
-    const conditionsMatch = matchesRuleConditions({
+    const executionKey = buildAutomationExecutionKey(shop, orderGid, rule.id);
+    const evaluatedAt = new Date();
+
+    await db.automationExecution.upsert({
+      where: { executionKey },
+      create: {
+        shop,
+        executionKey,
+        orderGid,
+        orderName: order.name ?? null,
+        ruleId: rule.id,
+        ruleNameSnapshot: rule.name,
+        rulePrioritySnapshot: rule.priority,
+        trigger: rule.trigger,
+        status: "PROCESSING",
+        reason: "EVALUATING",
+        orderSubtotal,
+        currencyCode,
+        evaluatedAt,
+      },
+      update: {
+        orderName: order.name ?? null,
+        ruleNameSnapshot: rule.name,
+        rulePrioritySnapshot: rule.priority,
+        trigger: rule.trigger,
+        status: "PROCESSING",
+        reason: "EVALUATING",
+        orderSubtotal,
+        currencyCode,
+        conditions: Prisma.DbNull,
+        eligibleSubtotal: null,
+        rewardBase: null,
+        rewardBaseAmount: null,
+        estimatedReward: null,
+        creditGrantId: null,
+        grantAmount: null,
+        errorMessage: null,
+        evaluatedAt,
+        completedAt: null,
+        attemptCount: { increment: 1 },
+      },
+    });
+
+    const conditionEvaluation = evaluateRuleConditions({
       order,
-      conditions: rule.conditions as unknown as RewardConditionGroup | null,
+      conditions: rule.conditions,
       orderSubtotal,
       currencyCode,
       paymentStatus,
       customer,
     });
+    const conditionSnapshot = conditionEvaluation as unknown as Prisma.InputJsonValue;
 
-    if (!conditionsMatch) continue;
+    const eligibleSubtotal = conditionEvaluation.matches
+      ? calculateEligibleLineSubtotal(
+          lineItems,
+          { productMode: rule.productMode, productIds },
+          currencyCode,
+        )
+      : null;
 
-    const eligibleSubtotal = calculateEligibleLineSubtotal(
-      lineItems,
-      { productMode: rule.productMode, productIds },
-      currencyCode,
-    );
+    const calculation = conditionEvaluation.matches
+      ? calculateReward({
+          orderSubtotal,
+          eligibleSubtotal: eligibleSubtotal!,
+          currencyCode,
+          paymentStatus,
+          rule: {
+            enabled: rule.enabled,
+            requirePrepaid: rule.requirePrepaid,
+            minimumOrderValue:
+              rule.minimumOrderValue == null
+                ? null
+                : String(rule.minimumOrderValue),
+            rewardBase: rule.rewardBase,
+            rewardType: rule.rewardType,
+            fixedAmount:
+              rule.fixedAmount == null ? undefined : String(rule.fixedAmount),
+            percentage:
+              rule.percentage == null ? undefined : String(rule.percentage),
+            maximumReward:
+              rule.maximumReward == null ? null : String(rule.maximumReward),
+            productMode: rule.productMode,
+            productIds,
+          },
+        })
+      : null;
 
-    const calculation = calculateReward({
-      orderSubtotal,
-      eligibleSubtotal,
-      currencyCode,
-      paymentStatus,
-      rule: {
-        enabled: rule.enabled,
-        requirePrepaid: rule.requirePrepaid,
-        minimumOrderValue:
-          rule.minimumOrderValue == null
-            ? null
-            : String(rule.minimumOrderValue),
+    const executionOutcome = classifyAutomationExecution({
+      conditionEvaluation,
+      calculation,
+    });
+    const rewardBaseAmount = rule.rewardBase === "ELIGIBLE_ITEMS"
+      ? eligibleSubtotal
+      : orderSubtotal;
+
+    if (executionOutcome.status !== "PROCESSING") {
+      await db.automationExecution.update({
+        where: { executionKey },
+        data: {
+          status: executionOutcome.status,
+          reason: executionOutcome.reason,
+          conditions: conditionSnapshot,
+          eligibleSubtotal,
+          rewardBase: rule.rewardBase,
+          rewardBaseAmount,
+          estimatedReward: "0",
+          completedAt: new Date(),
+        },
+      });
+      continue;
+    }
+
+    if (!calculation || !calculation.eligible || eligibleSubtotal == null) {
+      continue;
+    }
+
+    await db.automationExecution.update({
+      where: { executionKey },
+      data: {
+        status: "PROCESSING",
+        reason: "REWARD_ELIGIBLE",
+        conditions: conditionSnapshot,
+        eligibleSubtotal,
         rewardBase: rule.rewardBase,
-        rewardType: rule.rewardType,
-        fixedAmount:
-          rule.fixedAmount == null ? undefined : String(rule.fixedAmount),
-        percentage:
-          rule.percentage == null ? undefined : String(rule.percentage),
-        maximumReward:
-          rule.maximumReward == null ? null : String(rule.maximumReward),
-        productMode: rule.productMode,
-        productIds,
+        rewardBaseAmount,
+        estimatedReward: calculation.amount,
+        completedAt: null,
       },
     });
-
-    if (!calculation.eligible) continue;
 
     if (
       rule.expiryDays != null &&
@@ -412,6 +547,25 @@ export async function processFulfilledOrder({
     ) {
       throw new Error(`Automation rule ${rule.id} has invalid expiryDays.`);
     }
+
+    const emailSettings = await db.emailNotificationSettings.findUnique({
+      where: { shop },
+      select: { issuedEmailMode: true },
+    });
+    let issuedEmailMode = emailSettings?.issuedEmailMode ?? "SHOPIFY_NATIVE";
+    if (issuedEmailMode === "CREDITFLOW_CUSTOM") {
+      try {
+        const billing = await getBillingStatus(admin, shop);
+        if (!billing.emailEntitled) issuedEmailMode = "SHOPIFY_NATIVE";
+      } catch {
+        // Fail safe to Shopify-native delivery if entitlement cannot be verified.
+        issuedEmailMode = "SHOPIFY_NATIVE";
+      }
+    }
+    const expiresAt = rule.expiryDays
+      ? new Date(Date.now() + rule.expiryDays * 86400000).toISOString()
+      : undefined;
+    const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
 
     const eventKey = `fulfilled:${shop}:${orderGid}:${rule.id}`;
     let grant: CreditGrant;
@@ -424,8 +578,15 @@ export async function processFulfilledOrder({
           customerGid,
           orderGid,
           ruleId: rule.id,
+          ruleNameSnapshot: rule.name,
+          ruleSnapshot: createAutomationRuleSnapshot(rule) as Prisma.InputJsonValue,
           amount: calculation.amount,
           currencyCode,
+          rewardBaseAmount:
+            rule.rewardBase === "ELIGIBLE_ITEMS"
+              ? eligibleSubtotal
+              : orderSubtotal,
+          expiresAt: expiresAtDate,
           status: "PROCESSING",
         },
       });
@@ -436,10 +597,20 @@ export async function processFulfilledOrder({
       ) {
         const existingGrant = await db.creditGrant.findUnique({
           where: { eventKey },
-          select: { id: true, status: true },
+          select: { id: true, status: true, amount: true },
         });
 
         if (existingGrant?.status === "ISSUED") {
+          await db.automationExecution.update({
+            where: { executionKey },
+            data: {
+              status: "ISSUED",
+              reason: "REWARD_ALREADY_ISSUED",
+              creditGrantId: existingGrant.id,
+              grantAmount: existingGrant.amount.toString(),
+              completedAt: new Date(),
+            },
+          });
           return {
             status: "SKIPPED",
             reason: "REWARD_ALREADY_ISSUED",
@@ -448,6 +619,16 @@ export async function processFulfilledOrder({
         }
 
         if (existingGrant?.status === "PROCESSING") {
+          await db.automationExecution.update({
+            where: { executionKey },
+            data: {
+              status: "REVIEW_REQUIRED",
+              reason: "REWARD_ALREADY_PROCESSING",
+              creditGrantId: existingGrant.id,
+              errorMessage: "A prior grant reservation is still processing.",
+              completedAt: new Date(),
+            },
+          });
           return {
             status: "SKIPPED",
             reason: "REWARD_ALREADY_PROCESSING",
@@ -455,6 +636,16 @@ export async function processFulfilledOrder({
           } as const;
         }
 
+        await db.automationExecution.update({
+          where: { executionKey },
+          data: {
+            status: "REVIEW_REQUIRED",
+            reason: "EXISTING_GRANT_REQUIRES_RECONCILIATION",
+            creditGrantId: existingGrant?.id ?? null,
+            errorMessage: "An existing grant requires financial reconciliation.",
+            completedAt: new Date(),
+          },
+        });
         return {
           status: "REVIEW_REQUIRED",
           reason: "EXISTING_GRANT_REQUIRES_RECONCILIATION",
@@ -463,37 +654,48 @@ export async function processFulfilledOrder({
         } as const;
       }
 
+      await db.automationExecution.update({
+        where: { executionKey },
+        data: {
+          status: "RETRY_PENDING",
+          reason: "GRANT_RESERVATION_FAILED",
+          errorMessage: errorMessage(error).slice(0, 1000),
+        },
+      });
       throw error;
     }
 
     let shopifyTransactionGid: string | null = null;
 
-    try {
-      const expiresAt = rule.expiryDays
-        ? new Date(Date.now() + rule.expiryDays * 86400000).toISOString()
-        : undefined;
+    let shopifyAccountGid: string | null = null;
 
+    try {
       const transaction = await issueNativeStoreCredit(admin, {
         customerGid,
         amount: calculation.amount,
         currencyCode,
         expiresAt,
-        notifyCustomer: rule.notifyCustomer,
+        notifyCustomer:
+          rule.notifyCustomer && issuedEmailMode === "SHOPIFY_NATIVE",
       });
 
-      // Retain the Shopify transaction ID in case the following DB transaction fails.
+      // Retain external transaction references in case the following DB transaction fails.
       shopifyTransactionGid = transaction.id;
+      shopifyAccountGid = transaction.accountId;
 
-      await db.$transaction([
-        db.creditGrant.update({
+      await db.$transaction(async (tx) => {
+        await tx.creditGrant.update({
           where: { id: grant.id },
           data: {
             status: "ISSUED",
             shopifyTransactionGid: transaction.id,
+            shopifyAccountGid: transaction.accountId,
+            expiresAt: expiresAtDate,
             issuedAt: new Date(),
           },
-        }),
-        db.creditLedgerEntry.create({
+        });
+
+        await tx.creditLedgerEntry.create({
           data: {
             shop,
             eventKey,
@@ -505,10 +707,46 @@ export async function processFulfilledOrder({
             currencyCode,
             reason: `Cashback for order ${order.name || order.id || orderGid}`,
             shopifyTransactionGid: transaction.id,
-            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            expiresAt: expiresAtDate,
           },
-        }),
-      ]);
+        });
+
+        if (rule.notifyCustomer && issuedEmailMode === "CREDITFLOW_CUSTOM") {
+          await tx.notification.create({
+            data: {
+              shop,
+              customerGid,
+              dedupeKey: `credit-issued:${shop}:${grant.id}`,
+              type: "CREDIT_ISSUED",
+              status: "QUEUED",
+              templateKey: "CREDIT_ISSUED",
+              metadata: {
+                creditGrantId: grant.id,
+                amount: calculation.amount,
+                currencyCode,
+                issuedEmailMode,
+                expiresAt: expiresAtDate?.toISOString() ?? null,
+                shopifyAccountGid: transaction.accountId,
+                shopifyTransactionGid: transaction.id,
+                orderName: order.name || order.id || orderGid,
+              },
+              scheduledAt: new Date(),
+            },
+          });
+        }
+
+        await tx.automationExecution.update({
+          where: { executionKey },
+          data: {
+            status: "ISSUED",
+            reason: "REWARD_ISSUED",
+            creditGrantId: grant.id,
+            grantAmount: calculation.amount,
+            completedAt: new Date(),
+            errorMessage: null,
+          },
+        });
+      });
 
       return {
         status: "ISSUED",
@@ -526,6 +764,10 @@ export async function processFulfilledOrder({
             ...(shopifyTransactionGid
               ? { shopifyTransactionGid }
               : {}),
+            ...(shopifyAccountGid
+              ? { shopifyAccountGid }
+              : {}),
+            expiresAt: expiresAtDate,
             errorMessage: errorMessage(error),
           },
         });
@@ -533,6 +775,25 @@ export async function processFulfilledOrder({
         console.error(
           `[CreditFlow] Could not persist failure status for grant ${grant.id}:`,
           statusUpdateError,
+        );
+      }
+
+      try {
+        await db.automationExecution.update({
+          where: { executionKey },
+          data: {
+            status: isKnownRejection(error) ? "FAILED" : "REVIEW_REQUIRED",
+            reason: isKnownRejection(error) ? "SHOPIFY_REJECTED" : "SHOPIFY_OUTCOME_UNCERTAIN",
+            creditGrantId: grant.id,
+            grantAmount: calculation.amount,
+            errorMessage: errorMessage(error).slice(0, 1000),
+            completedAt: new Date(),
+          },
+        });
+      } catch (executionUpdateError) {
+        console.error(
+          `[CreditFlow] Could not persist execution history for grant ${grant.id}:`,
+          executionUpdateError,
         );
       }
 

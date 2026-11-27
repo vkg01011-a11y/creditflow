@@ -1,4 +1,3 @@
-
 import type {
   HeadersFunction,
   LoaderFunctionArgs,
@@ -12,22 +11,37 @@ import {
 } from "react-router";
 
 import { boundary } from "@shopify/shopify-app-react-router/server";
-
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-
 import { authenticate } from "../shopify.server";
+import { getBillingStatus, getPlanSelectionUrl } from "../services/billing.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
+  const pathname = new URL(request.url).pathname;
 
-  return {
-    apiKey: process.env.SHOPIFY_API_KEY || "",
-  };
+  // Leave Plan & usage available so merchants can select or change a plan.
+  // Once configured, every other app route requires an active Shopify plan.
+  if (pathname !== "/app/billing") {
+    try {
+      const billing = await getBillingStatus(admin, session.shop);
+      if (billing.configured && !billing.active) {
+        return redirect(getPlanSelectionUrl(session.shop), { target: "_top" });
+      }
+    } catch (error) {
+      if (error instanceof Response) throw error;
+      // Keep core Store Credit automation available during Partner API outages.
+      console.error("[CreditFlow] Could not verify app subscription", {
+        shop: session.shop,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
+  }
+
+  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };
 
-// This route only provides the static Shopify API key to AppProvider.
-// Dashboard, Automations, and API resource routes authenticate their own data.
-// Keep this shell loader out of revalidation while navigation stays inside /app.
+// The shell only provides the static Shopify API key. Each page loads its own
+// shop-scoped data, so keep this loader out of in-app navigation revalidation.
 export const shouldRevalidate = ({
   currentUrl,
   nextUrl,
@@ -39,7 +53,8 @@ export const shouldRevalidate = ({
     isAdminAppPath(currentUrl.pathname) &&
     isAdminAppPath(nextUrl.pathname);
 
-  return staysInsideAdminApp ? false : defaultShouldRevalidate;
+  const entersOrLeavesBilling = currentUrl.pathname === "/app/billing" || nextUrl.pathname === "/app/billing";
+  return staysInsideAdminApp && !entersOrLeavesBilling ? false : defaultShouldRevalidate;
 };
 
 export default function App() {
@@ -47,14 +62,21 @@ export default function App() {
 
   return (
     <AppProvider apiKey={apiKey}>
+      <header className="pp-brand-header" aria-label="Pikmora Perks">
+        <img src="/branding/pikmora-perks.png" alt="" width="40" height="40" />
+        <span className="pp-brand-copy">
+          <span className="pp-brand-parent">Pikmora · PP</span>
+          <strong>Pikmora Perks</strong>
+          <span className="pp-brand-tagline">Rewards. Retention. Repeat.</span>
+        </span>
+      </header>
       <s-app-nav>
-        <s-link href="/app">
-          Dashboard
-        </s-link>
-
-        <s-link href="/app/automations">
-          Automations
-        </s-link>
+        <s-link href="/app">Overview</s-link>
+        <s-link href="/app/automations">Rewards</s-link>
+        <s-link href="/app/automation-history">Store credit &amp; activity</s-link>
+        <s-link href="/app/notifications">Customer emails</s-link>
+        <s-link href="/app/billing">Plan &amp; billing</s-link>
+        <s-link href="/app/support">Settings &amp; support</s-link>
       </s-app-nav>
 
       <Outlet />

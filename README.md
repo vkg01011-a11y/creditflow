@@ -1,237 +1,232 @@
-# Shopify App Template - React Router
+# Pikmora Perks
 
-This is a template for building a [Shopify app](https://shopify.dev/docs/apps/getting-started) using [React Router](https://reactrouter.com/). It was forked from the [Shopify Remix app template](https://github.com/Shopify/shopify-app-template-remix) and converted to React Router.
+Pikmora Perks is an embedded Shopify app for rule-based cashback rewards using **Shopify's native Store Credit**.
 
-Rather than cloning this repo, follow the [Quick Start steps](https://github.com/Shopify/shopify-app-template-react-router#quick-start).
+**Rewards. Retention. Repeat.**
 
-Visit the [`shopify.dev` documentation](https://shopify.dev/docs/api/shopify-app-react-router) for more details on the React Router app package.
+## Product principle
 
-## Upgrading from Remix
+Shopify is the authoritative source for customer Store Credit balances and transactions. Pikmora Perks stores reward rules, grant/reversal metadata, idempotency keys, webhook inbox records, audit information, and reporting data. It is not a second wallet.
 
-If you have an existing Remix app that you want to upgrade to React Router, please follow the [upgrade guide](https://github.com/Shopify/shopify-app-template-react-router/wiki/Upgrading-from-Remix). Otherwise, please follow the quick start guide below.
+## Current capabilities
 
-## Quick start
+- Configure cashback rules triggered by fully fulfilled orders.
+- Calculate percentage or fixed rewards with minimums, caps, expiry, prepaid requirements, product eligibility, and AND/OR conditions.
+- Issue Shopify native Store Credit using Shopify Admin GraphQL.
+- Store grant and transaction metadata in PostgreSQL.
+- Process fulfillment and refund webhooks through a durable database-backed queue.
+- Proportionally reverse cashback after partial/full refunds, with duplicate protection and manual review for uncertain outcomes.
+- Inspect refund reversals and operational webhook/privacy queues inside the embedded app.
+- Process Shopify customer data requests and customer/shop redaction webhooks.
+- Expose public liveness and dependency readiness probes.
+- Run the protected worker from a managed cron/scheduler using a one-shot Node.js command.
 
-### Prerequisites
+New automation rules are created paused. Review a rule before enabling it.
 
-Before you begin, you'll need to [download and install the Shopify CLI](https://shopify.dev/docs/apps/tools/cli/getting-started) if you haven't already.
+## Tech stack
 
-### Setup
+- Shopify app framework: Shopify React Router
+- Runtime: Node.js 22.12+
+- Language: TypeScript and JavaScript modules
+- Database: PostgreSQL
+- ORM: Prisma 6
+- Tests: Node.js built-in test runner
+- Deployment: Docker-compatible managed Node hosting
 
-```shell
-shopify app init --template=https://github.com/Shopify/shopify-app-template-react-router
+## Local development (Windows PowerShell)
+
+Install dependencies:
+
+```powershell
+npm.cmd ci
+Copy-Item .env.example .env
 ```
 
-### Local Development
+Link the Shopify app configuration and retrieve app environment values:
 
-```shell
-shopify app dev
+```powershell
+npm.cmd run config:link
+npm.cmd run shopify -- app env pull
 ```
 
-Press P to open the URL to your app. Once you click install, you can start development.
+Configure the local PostgreSQL connection and worker secret in `.env`. Keep this file private; it is Git-ignored.
 
-Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.
+Required environment variables:
 
-### Authenticating and querying data
+| Variable | Purpose |
+|---|---|
+| `SHOPIFY_API_KEY` | Shopify app client ID |
+| `SHOPIFY_API_SECRET` | Shopify app secret; also used for HMAC-based privacy pseudonyms |
+| `SHOPIFY_APP_URL` | Public app URL used by Shopify authentication |
+| `SCOPES` | Comma-separated Shopify API scopes required by the app |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SHADOW_DATABASE_URL` | Prisma shadow database connection |
+| `CREDITFLOW_WORKER_SECRET` | Random secret of at least 32 characters for the internal worker |
 
-To authenticate and query data you can use the `shopify` const that is exported from `/app/shopify.server.js`:
+Optional customer email delivery variables:
 
-```js
-export async function loader({ request }) {
-  const { admin } = await shopify.authenticate.admin(request);
+| Variable | Purpose |
+|---|---|
+| `RESEND_API_KEY` | Resend transactional email API key |
+| `CREDITFLOW_EMAIL_FROM` | Sender address on a domain verified with Resend |
 
-  const response = await admin.graphql(`
-    {
-      products(first: 25) {
-        nodes {
-          title
-          description
-        }
-      }
-    }`);
+Optional worker variables:
 
-  const {
-    data: {
-      products: { nodes },
-    },
-  } = await response.json();
+| Variable | Purpose |
+|---|---|
+| `WORKER_APP_URL` | Override the app URL used by the scheduled worker |
+| `WORKER_BATCH_LIMIT` | Worker batch size from 1 to 10; defaults to 5 |
 
-  return nodes;
-}
+Generate Prisma Client and apply migrations to the local development database:
+
+```powershell
+npx.cmd prisma generate
+npx.cmd prisma migrate deploy
 ```
 
-This template comes pre-configured with examples of:
+Start the Shopify development preview:
 
-1. Setting up your Shopify app in [/app/shopify.server.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/shopify.server.ts)
-2. Querying data using Graphql. Please see: [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/app._index.tsx).
-3. Responding to webhooks. Please see [/app/routes/webhooks.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/webhooks.app.uninstalled.tsx).
-4. Using metafields, metaobjects, and declarative custom data definitions. Please see [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-react-router/blob/main/app/routes/app._index.tsx) and [shopify.app.toml](https://github.com/Shopify/shopify-app-template-react-router/blob/main/shopify.app.toml).
-
-Please read the [documentation for @shopify/shopify-app-react-router](https://shopify.dev/docs/api/shopify-app-react-router) to see what other API's are available.
-
-## Shopify Dev MCP
-
-This template is configured with the Shopify Dev MCP. This instructs [Cursor](https://cursor.com/), [GitHub Copilot](https://github.com/features/copilot) and [Claude Code](https://claude.com/product/claude-code) and [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) to use the Shopify Dev MCP.
-
-For more information on the Shopify Dev MCP please read [the documentation](https://shopify.dev/docs/apps/build/devmcp).
-
-## Deployment
-
-### Application Storage
-
-This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
-The database is defined as a Prisma schema in `prisma/schema.prisma`.
-
-This use of SQLite works in production if your app runs as a single instance.
-The database that works best for you depends on the data your app needs and how it is queried.
-Here’s a short list of databases providers that provide a free tier to get started:
-
-| Database   | Type             | Hosters                                                                                                                                                                                                                                    |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MySQL      | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mysql), [Planet Scale](https://planetscale.com/), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/mysql) |
-| PostgreSQL | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-postgresql), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres)                                   |
-| Redis      | Key-value        | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-redis), [Amazon MemoryDB](https://aws.amazon.com/memorydb/)                                                                                                        |
-| MongoDB    | NoSQL / Document | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mongodb), [MongoDB Atlas](https://www.mongodb.com/atlas/database)                                                                                                  |
-
-To use one of these, you can use a different [datasource provider](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#datasource) in your `schema.prisma` file, or a different [SessionStorage adapter package](https://github.com/Shopify/shopify-api-js/blob/main/packages/shopify-api/docs/guides/session-storage.md).
-
-### Build
-
-Build the app by running the command below with the package manager of your choice:
-
-Using yarn:
-
-```shell
-yarn build
+```powershell
+npm.cmd run dev -- --store creditflow-dev-vivek.myshopify.com
 ```
 
-Using npm:
+## Validation
 
-```shell
-npm run build
+Run the checks from the project root:
+
+```powershell
+npx.cmd prisma validate
+npx.cmd prisma generate
+npx.cmd prisma migrate status
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run build
 ```
 
-Using pnpm:
+Back up PostgreSQL before applying any new migration to a database containing data.
 
-```shell
-pnpm run build
+## Health and readiness
+
+- `GET /healthz` is a lightweight liveness probe. It confirms that the web process can answer requests.
+- `GET /readyz` checks required runtime configuration and PostgreSQL connectivity. It returns HTTP 200 only when both are ready; otherwise it returns HTTP 503.
+- Readiness responses never include credentials, database URLs, or raw connection errors.
+
+Use `/readyz` for deployment health gates. A passing readiness response does not prove that Shopify has deployed the latest webhook subscriptions or that the external scheduler is running.
+
+## Background worker
+
+Shopify webhooks persist minimized events and return quickly. Queue processing is performed by the protected `POST /internal/webhook-worker` endpoint.
+
+For a managed scheduler or cron job, configure these environment variables:
+
+- `SHOPIFY_APP_URL` or `WORKER_APP_URL`: the public HTTPS app URL.
+- `CREDITFLOW_WORKER_SECRET`: the same 32+ character secret configured on the web service.
+- Optionally, `WORKER_BATCH_LIMIT`: 1–10.
+
+Run one worker batch:
+
+```bash
+npm run worker:once
 ```
 
-## Hosting
+Schedule that command every minute in the hosting provider. The runner sends the protected POST request, enforces a 55-second timeout, and emits structured counts without logging the secret.
 
-When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/launch/deployment) to host it externally. From there, you have a few options:
+The embedded **Operations** page shows queue state, worker-secret configuration, and the latest authenticated worker heartbeat. A heartbeat becomes stale after three minutes without a new run; heartbeat history is retained for 14 days. Also monitor scheduler execution history in the hosting provider.
 
-- [Google Cloud Run](https://shopify.dev/docs/apps/launch/deployment/deploy-to-google-cloud-run): This tutorial is written specifically for this example repo, and is compatible with the extended steps included in the subsequent [**Build your app**](tutorial) in the **Getting started** docs. It is the most detailed tutorial for taking a React Router-based Shopify app and deploying it to production. It includes configuring permissions and secrets, setting up a production database, and even hosting your apps behind a load balancer across multiple regions.
-- [Fly.io](https://fly.io/docs/js/shopify/): Leverages the Fly.io CLI to quickly launch Shopify apps to a single machine.
-- [Render](https://render.com/docs/deploy-shopify-app): This tutorial guides you through using Docker to deploy and install apps on a Dev store.
-- [Manual deployment guide](https://shopify.dev/docs/apps/launch/deployment/deploy-to-hosting-service): This resource provides general guidance on the requirements of deployment including environment variables, secrets, and persistent data.
+## Customer email notifications
 
-When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
+Open **Customer emails** in the embedded app at `/app/notifications`.
 
-## Gotchas / Troubleshooting
+Credit-issued notifications have three mutually exclusive modes:
 
-### Database tables don't exist
+- **Shopify native email** (default): Pikmora Perks passes Shopify's `notify: true` flag when issuing the Store Credit. Shopify sends its standard store-credit notification. Edit that message in Shopify Admin → Settings → Notifications.
+- **Pikmora Perks branded email**: Shopify's native email is disabled for that credit grant and Pikmora Perks queues one custom transactional email through Resend. Merchants can configure sender display name, reply-to, logo, accent colour, subject, headline, message, CTA label, and footer.
+- **Disabled**: the credit is still issued, but no issue email is sent.
 
-If you get an error like:
+Expiry reminders are a separate opt-in. Merchants choose reminders 7, 3, and/or 1 day before the expiry date. Pikmora Perks fetches the exact Shopify credit transaction immediately before sending and suppresses the reminder if the transaction has no expiry or its remaining amount is zero. The Operations page tracks queued, sent, skipped, and failed email notifications.
 
-```
-The table `main.Session` does not exist in the current database.
-```
+Before enabling Pikmora Perks-branded delivery or expiry reminders:
 
-Create the database for Prisma. Run the `setup` script in `package.json` using `npm`, `yarn` or `pnpm`.
+1. Create a Resend account and verify a sending domain by adding the DNS records Resend provides.
+2. Set `RESEND_API_KEY` in the private hosting secret manager.
+3. Set `CREDITFLOW_EMAIL_FROM` to a sender address on that verified domain, for example `Pikmora Perks Rewards <rewards@your-domain.com>`.
+4. Confirm the app has `read_store_credit_accounts` and `read_store_credit_account_transactions` scopes. Stores may need to reauthorize after the scope change.
+5. Save the email design in **Customer emails** and enable the required mode.
 
-### Navigating/redirecting breaks an embedded app
+Template tokens:
 
-Embedded apps must maintain the user session, which can be tricky inside an iFrame. To avoid issues:
+- Issued credit: `{{ shop_name }}`, `{{ customer_first_name }}`, `{{ credit_amount }}`.
+- Expiry reminder: `{{ shop_name }}`, `{{ customer_first_name }}`, `{{ remaining_amount }}`, `{{ expiry_date }}`.
 
-1. Use `Link` from `react-router` or `@shopify/polaris`. Do not use `<a>`.
-2. Use `redirect` returned from `authenticate.admin`. Do not use `redirect` from `react-router`
-3. Use `useSubmit` from `react-router`.
+These are transactional store-credit notifications, not marketing subscriptions. Pikmora Perks does not send both Shopify's native issue email and its own branded issue email for the same grant.
 
-This only applies if your app is embedded, which it will be by default.
+## Container deployment
 
-### Webhooks: shop-specific webhook subscriptions aren't updated
+Build the production image:
 
-If you are registering webhooks in the `afterAuth` hook, using `shopify.registerWebhooks`, you may find that your subscriptions aren't being updated.
-
-Instead of using the `afterAuth` hook declare app-specific webhooks in the `shopify.app.toml` file. This approach is easier since Shopify will automatically sync changes every time you run `deploy` (e.g: `npm run deploy`). Please read these guides to understand more:
-
-1. [app-specific vs shop-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions)
-2. [Create a subscription tutorial](https://shopify.dev/docs/apps/build/webhooks/subscribe/get-started?deliveryMethod=https)
-
-If you do need shop-specific webhooks, keep in mind that the package calls `afterAuth` in 2 scenarios:
-
-- After installing the app
-- When an access token expires
-
-During normal development, the app won't need to re-authenticate most of the time, so shop-specific subscriptions aren't updated. To force your app to update the subscriptions, uninstall and reinstall the app. Revisiting the app will call the `afterAuth` hook.
-
-### Webhooks: Admin created webhook failing HMAC validation
-
-Webhooks subscriptions created in the [Shopify admin](https://help.shopify.com/en/manual/orders/notifications/webhooks) will fail HMAC validation. This is because the webhook payload is not signed with your app's secret key.
-
-The recommended solution is to use [app-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions) defined in your toml file instead. Test your webhooks by triggering events manually in the Shopify admin(e.g. Updating the product title to trigger a `PRODUCTS_UPDATE`).
-
-### Webhooks: Admin object undefined on webhook events triggered by the CLI
-
-When you trigger a webhook event using the Shopify CLI, the `admin` object will be `undefined`. This is because the CLI triggers an event with a valid, but non-existent, shop. The `admin` object is only available when the webhook is triggered by a shop that has installed the app. This is expected.
-
-Webhooks triggered by the CLI are intended for initial experimentation testing of your webhook configuration. For more information on how to test your webhooks, see the [Shopify CLI documentation](https://shopify.dev/docs/apps/tools/cli/commands#webhook-trigger).
-
-### Incorrect GraphQL Hints
-
-By default the [graphql.vscode-graphql](https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql) extension for will assume that GraphQL queries or mutations are for the [Shopify Admin API](https://shopify.dev/docs/api/admin). This is a sensible default, but it may not be true if:
-
-1. You use another Shopify API such as the storefront API.
-2. You use a third party GraphQL API.
-
-If so, please update [.graphqlrc.ts](https://github.com/Shopify/shopify-app-template-react-router/blob/main/.graphqlrc.ts).
-
-### Using Defer & await for streaming responses
-
-By default the CLI uses a cloudflare tunnel. Unfortunately cloudflare tunnels wait for the Response stream to finish, then sends one chunk. This will not affect production.
-
-To test [streaming using await](https://reactrouter.com/api/components/Await#await) during local development we recommend [localhost based development](https://shopify.dev/docs/apps/build/cli-for-apps/networking-options#localhost-based-development).
-
-### "nbf" claim timestamp check failed
-
-This is because a JWT token is expired. If you are consistently getting this error, it could be that the clock on your machine is not in sync with the server. To fix this ensure you have enabled "Set time and date automatically" in the "Date and Time" settings on your computer.
-
-### Using MongoDB and Prisma
-
-If you choose to use MongoDB with Prisma, there are some gotchas in Prisma's MongoDB support to be aware of. Please see the [Prisma SessionStorage README](https://www.npmjs.com/package/@shopify/shopify-app-session-storage-prisma#mongodb).
-
-### Unable to require(`C:\...\query_engine-windows.dll.node`).
-
-Unable to require(`C:\...\query_engine-windows.dll.node`).
-The Prisma engines do not seem to be compatible with your system.
-
-query_engine-windows.dll.node is not a valid Win32 application.
-
-**Fix:** Set the environment variable:
-
-```shell
-PRISMA_CLIENT_ENGINE_TYPE=binary
+```bash
+docker build -t creditflow:preproduction .
 ```
 
-This forces Prisma to use the binary engine mode, which runs the query engine as a separate process and can work via emulation on Windows ARM64.
+Configure the production environment variables before deployment. Run Prisma migrations once as the provider's release/pre-deploy command:
 
-## Resources
+```bash
+npm run setup
+```
 
-React Router:
+Start the web service with the Docker image's default command, equivalent to:
 
-- [React Router docs](https://reactrouter.com/home)
+```bash
+npm run start
+```
 
-Shopify:
+Do not run database migrations independently from every web replica at startup. Use one release step for each deployment.
 
-- [Intro to Shopify apps](https://shopify.dev/docs/apps/getting-started)
-- [Shopify App React Router docs](https://shopify.dev/docs/api/shopify-app-react-router)
-- [Shopify CLI](https://shopify.dev/docs/apps/tools/cli)
-- [Shopify App Bridge](https://shopify.dev/docs/api/app-bridge-library).
-- [Polaris Web Components](https://shopify.dev/docs/api/app-home/polaris-web-components).
-- [App extensions](https://shopify.dev/docs/apps/app-extensions/list)
-- [Shopify Functions](https://shopify.dev/docs/api/functions)
+The worker scheduler can use the same image with the command `npm run worker:once`. Do not expose `CREDITFLOW_WORKER_SECRET` to browser code or public logs.
 
-Internationalization:
+## Refund safety
 
-- [Internationalizing your app](https://shopify.dev/docs/apps/best-practices/internationalization/getting-started)
+- Cashback reversal is calculated against the reward basis recorded when the grant was issued.
+- Each refund/grant pair has a unique reservation before the Shopify debit mutation is called.
+- Shopify remains the wallet authority.
+- If a debit outcome is ambiguous, the app does not automatically repeat it. Inspect the customer’s Shopify Store Credit transactions and reconcile the corresponding entry in **Refund reversals**.
+- Grants created before the reward-basis field was introduced require manual review for refunds.
+
+## Production release gates
+
+This repository is not yet approved for live merchants or the Shopify App Store. Before release:
+
+- Replace placeholder Shopify app and OAuth URLs with the final HTTPS domain.
+- Provision production PostgreSQL and test backup/restore.
+- Configure secrets, monitoring, log retention, and a trusted one-minute worker schedule.
+- Deploy and verify current webhook subscriptions.
+- Complete install, reauthorization, uninstall/reinstall, privacy, and worker recovery testing.
+- Publish a privacy policy, terms, support contact, support documentation, and App Store listing assets.
+- Review Shopify policy compliance and data handling with appropriate legal advice.
+
+The Render staging Blueprint is in [render.yaml](./render.yaml). Review the resources, region, service names, and branch before creating the Blueprint in Render. It is configured for the feature branch; creating the Blueprint provisions billable resources.
+
+See [PRODUCT-READINESS.md](./PRODUCT-READINESS.md), [RELIABILITY-OPERATIONS.md](./RELIABILITY-OPERATIONS.md), and [PREPRODUCTION-RUNBOOK.md](./PREPRODUCTION-RUNBOOK.md) for the release checklist and operating procedures.
+
+
+## Pricing and Shopify App Pricing
+
+The current plans are Starter $0/month with 100 evaluated orders then $0.10 per additional order; Growth $9/month with 300 included then $0.10/order; Professional $19/month with 1,000 included then $0.10/order; and Business $49/month with unlimited orders and no overage. Growth, Professional, and Business have 14-day trials. Starter is free forever with no trial. Prices are USD/month.
+
+Shopify Partner Dashboard must define the recurring item handles `starter_plan`, `growth_plan`, `professional_plan`, and `business_plan`. Configure the `orders_processed` meter as graduated pricing: Starter 1–100 orders at $0.00/order, then 101+ at $0.10/order; Growth 1–300 at $0.00, then 301+ at $0.10; Professional 1–1,000 at $0.00, then 1,001+ at $0.10. Do not configure a meter on Business. The three paid plans each have a 14-day trial. These Partner Dashboard values are not created by application code.
+
+Set private environment values `SHOPIFY_PARTNER_ID` (use the numeric Partner ID in the Partner Dashboard URL, not the separate Dev Dashboard organization ID), `SHOPIFY_PARTNER_API_ACCESS_TOKEN` (Manage apps permission), `SHOPIFY_APP_GID`, `SHOPIFY_PARTNER_API_VERSION` (default `2026-10`), `SHOPIFY_APP_EVENTS_API_VERSION` (default `2026-10`), and `SHOPIFY_APP_HANDLE` (staging default `creditflow-1`; set the handle for the relevant Shopify app listing). Existing `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` are used for App Events token exchange. Do not commit these secrets.
+
+One usage unit is reserved once per distinct, fully fulfilled Shopify order that Pikmora Perks evaluates with customer and currency fields present, even when no reward rule matches or credit is issued. Pikmora Perks uses Shopify’s original webhook trigger timestamp (falling back to recorded receipt time for older events), so delayed worker processing does not move usage into the wrong billing cycle. Duplicate webhook deliveries and retries do not add a unit. Refunds do not erase an evaluated order. Trial, Business, and confirmed no-active-plan orders are not sent as billable events. If the Partner API is unavailable, the subscription is unrecognized, or Shopify does not provide a valid cycle, Pikmora Perks records a `REVIEW_REQUIRED` usage row and continues Store Credit automation; it never guesses a plan or charges automatically. Pending events are revalidated immediately before sending. A plan, trial, or billing-cycle change moves the event to review rather than silently dropping or submitting it. Transient App Events failures retry with the same stable key; an exhausted/uncertain delivery needs manual reconciliation. App Events payloads contain only the shop ID, timestamp, hashed idempotency key, meter handle, and quantity; no customer or order details. A successful HTTP 202 confirms event receipt, not final billing validation; inspect Shopify Dev Dashboard → App Billing Events.
+
+The **Plan & usage** page keeps Shopify-hosted plan management available during billing-status outages and explains that totals may be unavailable. **Operations** shows billing queue counts and waiting/review items without exposing customer or order identifiers. Do not manually resubmit an uncertain event until its outcome has been checked in Shopify Dev Dashboard → App Billing Events.
+
+Core rewards, Store Credit accuracy, refund safety, and privacy workflows remain available on Starter. Pikmora Perks-branded emails and expiry reminders require Professional or Business and are checked again at delivery time.
+
+
+Plan selection return URL: configure each public plan's Shopify App Pricing welcome link to return to `/app/billing`. The app keeps this route accessible without a subscription so merchants can select or change a plan; all other app routes redirect to Shopify's hosted pricing page once Partner API configuration is active.
+
+Shopify trial policy note: each plan is configured with 14 trial days, but Shopify pools trial days across all plans for the same app/store over a rolling 180-day period. Switching from Growth to Professional does not restart a fresh 14-day trial; remaining trial is reduced by days already used.
+
+Billing plan timing guard: only orders evaluated while a confirmed non-trial Starter, Growth, or Professional subscription with a valid active cycle are added to the sendable outbox. Business and trial-period orders are never charged. Plan/status/cycle uncertainty is saved as a durable review row; an order is not silently lost because billing is temporarily unreachable. The plan key and original timestamp are captured on each sendable usage row and revalidated at event delivery. If a merchant changes plans while an event is pending, the event is not auto-submitted and requires reconciliation. Partner API/App Events outages never block Store Credit rewards.

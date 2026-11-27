@@ -1,12 +1,13 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useFetcher, useLoaderData, useRevalidator } from "react-router";
+import { Link, useFetcher, useLoaderData, useRevalidator } from "react-router";
 
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getShopMetadata } from "../services/merchant.server";
+import { getRewardRuleTemplate, listRewardRuleTemplates } from "../domain/reward-rule-templates.mjs";
 
 type ProductOption = {
   id: string;
@@ -51,10 +52,15 @@ type RuleCondition = {
   value: string;
 };
 
-type ConditionGroup = {
-  version: 1;
+type RuleConditionGroup = {
   logic: "AND" | "OR";
   rules: RuleCondition[];
+};
+
+type ConditionGroup = {
+  version: 2;
+  logic: "AND" | "OR";
+  groups: RuleConditionGroup[];
 };
 
 type Rule = {
@@ -102,6 +108,7 @@ type ActionResponse = {
   success?: boolean;
   error?: string;
   operation?: string;
+  preservedGrantCount?: number;
   rule?: { id: string };
 };
 
@@ -113,6 +120,7 @@ type Notice = {
 type Filter = "ALL" | "ACTIVE" | "PAUSED" | "ARCHIVED";
 
 const MAX_SELECTED_PRODUCTS = 500;
+const RULE_TEMPLATES = listRewardRuleTemplates();
 
 const CONDITION_FIELDS: Array<{
   value: ConditionField;
@@ -202,9 +210,9 @@ function defaultValue(field: ConditionField) {
 
 function emptyConditions(): ConditionGroup {
   return {
-    version: 1,
+    version: 2,
     logic: "AND",
-    rules: [],
+    groups: [{ logic: "AND", rules: [] }],
   };
 }
 
@@ -240,27 +248,45 @@ function normalizeConditions(value: unknown): ConditionGroup {
   const raw = value as {
     logic?: unknown;
     rules?: unknown;
+    groups?: unknown;
   };
 
-  const rules = Array.isArray(raw.rules)
-    ? raw.rules
+  const normalizeRules = (items: unknown): RuleCondition[] =>
+    Array.isArray(items)
+      ? items
+          .filter(
+            (item): item is Record<string, unknown> =>
+              typeof item === "object" &&
+              item !== null &&
+              !Array.isArray(item),
+          )
+          .map((item) => ({
+            field: item.field as ConditionField,
+            operator: item.operator as ConditionOperator,
+            value: String(item.value ?? ""),
+          }))
+      : [];
+
+  if (Array.isArray(raw.groups) && raw.groups.length > 0) {
+    return {
+      version: 2,
+      logic: raw.logic === "OR" ? "OR" : "AND",
+      groups: raw.groups
         .filter(
           (item): item is Record<string, unknown> =>
-            typeof item === "object" &&
-            item !== null &&
-            !Array.isArray(item),
+            typeof item === "object" && item !== null && !Array.isArray(item),
         )
         .map((item) => ({
-          field: item.field as ConditionField,
-          operator: item.operator as ConditionOperator,
-          value: String(item.value ?? ""),
-        }))
-    : [];
+          logic: item.logic === "OR" ? "OR" as const : "AND" as const,
+          rules: normalizeRules(item.rules),
+        })),
+    };
+  }
 
   return {
-    version: 1,
+    version: 2,
     logic: raw.logic === "OR" ? "OR" : "AND",
-    rules,
+    groups: [{ logic: raw.logic === "OR" ? "OR" : "AND", rules: normalizeRules(raw.rules) }],
   };
 }
 
@@ -316,12 +342,11 @@ function shortDate(value: string) {
   }).format(new Date(value));
 }
 
-function conditionSummary(group: ConditionGroup) {
-  if (group.rules.length === 0) return "No additional conditions";
-
-  return `${group.rules.length} condition${
-    group.rules.length === 1 ? "" : "s"
-  } · Match ${group.logic === "AND" ? "all" : "any"}`;
+function conditionSummary(conditions: ConditionGroup) {
+  const populated = conditions.groups.filter((group) => group.rules.length > 0);
+  if (populated.length === 0) return "No additional conditions";
+  const count = populated.reduce((sum, group) => sum + group.rules.length, 0);
+  return `${count} condition${count === 1 ? "" : "s"} in ${populated.length} group${populated.length === 1 ? "" : "s"} · Match ${conditions.logic === "AND" ? "all groups" : "any group"}`;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -394,7 +419,7 @@ export default function AutomationsPage() {
   const data = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
   const productsFetcher = useFetcher<ProductCatalogResponse>();
-  const revalidator = useRevalidator();
+  const { revalidate } = useRevalidator();
 
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -410,6 +435,7 @@ export default function AutomationsPage() {
   const [hasMoreProducts, setHasMoreProducts] = useState(false);
   const [productError, setProductError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const pendingActionResponseRef = useRef(false);
 
   const busy = fetcher.state !== "idle";
   const productsBusy = productsFetcher.state !== "idle";
@@ -493,19 +519,32 @@ export default function AutomationsPage() {
   }, [data.rules, filter, search]);
 
   useEffect(() => {
-    if (fetcher.state !== "idle" || !fetcher.data) return;
+    // Fetchers retain their last response after an action completes. Only
+    // consume a response when this page has explicitly submitted a new action;
+    // loader revalidation must never reset an edit dialog.
+    if (
+      fetcher.state !== "idle" ||
+      !pendingActionResponseRef.current
+    ) {
+      return;
+    }
 
-    if (fetcher.data.error) {
+    pendingActionResponseRef.current = false;
+    const result = fetcher.data;
+
+    if (!result) return;
+
+    if (result.error) {
       setNotice({
         type: "error",
-        message: fetcher.data.error,
+        message: result.error,
       });
       return;
     }
 
-    if (fetcher.data.success) {
+    if (result.success) {
       const messages: Record<string, string> = {
-        create: "Automation created successfully.",
+        create: "Automation created paused. Review it, then activate it when ready.",
         update: "Automation updated. Changes apply to future order evaluations.",
         toggle: "Automation status updated.",
         duplicate: "A paused copy of the automation was created.",
@@ -515,14 +554,15 @@ export default function AutomationsPage() {
 
       setNotice({
         type: "success",
-        message:
-          messages[fetcher.data.operation ?? ""] ||
-          "Automation updated successfully.",
+        message: result.operation === "delete"
+          ? `Automation permanently deleted. ${result.preservedGrantCount ?? 0} historical grant(s) and their financial records were retained.`
+          : messages[result.operation ?? ""] ||
+            "Automation updated successfully.",
       });
 
       if (
-        fetcher.data.operation === "create" ||
-        fetcher.data.operation === "update"
+        result.operation === "create" ||
+        result.operation === "update"
       ) {
         setBuilderOpen(false);
         setEditingRuleId(null);
@@ -530,12 +570,13 @@ export default function AutomationsPage() {
         setStep(1);
       }
 
-      revalidator.revalidate();
+      revalidate();
     }
-  }, [fetcher.data, fetcher.state, revalidator]);
+  }, [fetcher.data, fetcher.state, revalidate]);
 
   function sendOperation(payload: Record<string, unknown>) {
     setNotice(null);
+    pendingActionResponseRef.current = true;
 
     fetcher.submit(JSON.stringify(payload), {
       method: "POST",
@@ -643,35 +684,48 @@ export default function AutomationsPage() {
   }
 
   function updateCondition(
-    index: number,
+    groupIndex: number,
+    conditionIndex: number,
     patch: Partial<RuleCondition>,
   ) {
     setForm((current) => ({
       ...current,
       conditions: {
         ...current.conditions,
-        rules: current.conditions.rules.map((condition, i) =>
-          i === index
-            ? { ...condition, ...patch }
-            : condition,
+        groups: current.conditions.groups.map((group, currentGroupIndex) =>
+          currentGroupIndex === groupIndex
+            ? {
+                ...group,
+                rules: group.rules.map((condition, currentConditionIndex) =>
+                  currentConditionIndex === conditionIndex
+                    ? { ...condition, ...patch }
+                    : condition,
+                ),
+              }
+            : group,
         ),
       },
     }));
   }
 
   function changeConditionField(
-    index: number,
+    groupIndex: number,
+    conditionIndex: number,
     field: ConditionField,
   ) {
-    updateCondition(index, {
+    updateCondition(groupIndex, conditionIndex, {
       field,
       operator: defaultOperator(field),
       value: defaultValue(field),
     });
   }
 
-  function addCondition() {
-    if (form.conditions.rules.length >= 20) {
+  function addCondition(groupIndex: number) {
+    const totalConditions = form.conditions.groups.reduce(
+      (sum, group) => sum + group.rules.length,
+      0,
+    );
+    if (totalConditions >= 20) {
       setNotice({
         type: "error",
         message: "A maximum of 20 conditions is supported per automation.",
@@ -683,28 +737,83 @@ export default function AutomationsPage() {
       ...current,
       conditions: {
         ...current.conditions,
-        rules: [
-          ...current.conditions.rules,
-          {
-            field: "ORDER_SUBTOTAL",
-            operator: "GREATER_THAN_OR_EQUAL",
-            value: "5000",
-          },
-        ],
+        groups: current.conditions.groups.map((group, index) =>
+          index === groupIndex
+            ? {
+                ...group,
+                rules: [...group.rules, {
+                  field: "ORDER_SUBTOTAL",
+                  operator: "GREATER_THAN_OR_EQUAL",
+                  value: "5000",
+                }],
+              }
+            : group,
+        ),
       },
     }));
   }
 
-  function removeCondition(index: number) {
+  function addConditionGroup() {
+    if (form.conditions.groups.length >= 10) {
+      setNotice({ type: "error", message: "A maximum of 10 condition groups is supported." });
+      return;
+    }
     setForm((current) => ({
       ...current,
       conditions: {
         ...current.conditions,
-        rules: current.conditions.rules.filter(
-          (_, i) => i !== index,
+        groups: [...current.conditions.groups, { logic: "AND", rules: [] }],
+      },
+    }));
+  }
+
+  function removeConditionGroup(groupIndex: number) {
+    setForm((current) => ({
+      ...current,
+      conditions: {
+        ...current.conditions,
+        groups: current.conditions.groups.length === 1
+          ? [{ logic: "AND", rules: [] }]
+          : current.conditions.groups.filter((_, index) => index !== groupIndex),
+      },
+    }));
+  }
+
+  function removeCondition(groupIndex: number, conditionIndex: number) {
+    setForm((current) => ({
+      ...current,
+      conditions: {
+        ...current.conditions,
+        groups: current.conditions.groups.map((group, index) =>
+          index === groupIndex
+            ? { ...group, rules: group.rules.filter((_, ruleIndex) => ruleIndex !== conditionIndex) }
+            : group,
         ),
       },
     }));
+  }
+
+  function setConditionGroupLogic(groupIndex: number, logic: "AND" | "OR") {
+    setForm((current) => ({
+      ...current,
+      conditions: {
+        ...current.conditions,
+        groups: current.conditions.groups.map((group, index) =>
+          index === groupIndex ? { ...group, logic } : group,
+        ),
+      },
+    }));
+  }
+
+  function applyTemplate(templateId: string) {
+    const template = getRewardRuleTemplate(templateId) as FormState | null;
+    if (!template) return;
+    setForm(template);
+    setSelectedProducts([]);
+    setEditingRuleId(null);
+    setStep(1);
+    setNotice(null);
+    if (template.productMode !== "ALL") loadProductCatalog("");
   }
 
   function toggleProduct(productId: string, checked: boolean) {
@@ -794,7 +903,18 @@ export default function AutomationsPage() {
       return false;
     }
 
-    for (const condition of form.conditions.rules) {
+    if (
+      form.conditions.groups.length > 1 &&
+      form.conditions.groups.some((group) => group.rules.length === 0)
+    ) {
+      setNotice({
+        type: "error",
+        message: "Add a condition to each group or remove the empty group.",
+      });
+      return false;
+    }
+
+    for (const condition of form.conditions.groups.flatMap((group) => group.rules)) {
       if (!condition.value.trim()) {
         setNotice({
           type: "error",
@@ -902,6 +1022,19 @@ export default function AutomationsPage() {
     });
   }
 
+  function deleteRule(rule: Rule) {
+    const confirmed = window.confirm(
+      `Permanently delete "${rule.name}"? It will be removed from this dashboard and the AutomationRule database table. Existing Shopify Store Credit balances, grant records, Shopify transaction references, refund reversals and ledger history will be retained. This action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    sendOperation({
+      operation: "delete",
+      ruleId: rule.id,
+    });
+  }
+
   function toggleRule(rule: Rule) {
     sendOperation({
       operation: "toggle",
@@ -909,6 +1042,47 @@ export default function AutomationsPage() {
       enabled: !rule.enabled,
     });
   }
+
+  const liveConditionGroups = form.conditions.groups
+    .filter((group) => group.rules.length > 0)
+    .map((group) => {
+      const rules = group.rules.map((condition) => {
+        const fieldLabel = CONDITION_FIELDS.find((field) => field.value === condition.field)?.label ?? "Condition";
+        const value = condition.field === "ORDER_SUBTOTAL"
+          ? formatMoney(condition.value, data.currencyCode)
+          : condition.field === "PAYMENT_STATUS"
+            ? humanize(condition.value)
+            : condition.value;
+        return `${fieldLabel} ${humanize(condition.operator).toLowerCase()} ${value}`;
+      });
+      return rules.join(group.logic === "AND" ? " and " : " or ");
+    });
+  const liveConditionText = liveConditionGroups.length > 0
+    ? liveConditionGroups
+        .map((group) => liveConditionGroups.length > 1 ? `(${group})` : group)
+        .join(form.conditions.logic === "AND" ? " and " : " or ")
+    : "";
+  const liveProductText = form.productMode === "ALL"
+    ? "any product"
+    : `${form.productMode === "INCLUDE" ? "selected products only" : "all except selected products"} (${form.productIds.length} selected)`;
+  const liveBaseText = form.productMode === "ALL" && form.rewardBase === "ORDER_SUBTOTAL"
+    ? "the order subtotal"
+    : "eligible product value";
+  const liveRewardText = form.rewardType === "PERCENTAGE"
+    ? `${form.percentage || "0"}% of ${liveBaseText}`
+    : `${formatMoney(form.fixedAmount, data.currencyCode)} fixed credit`;
+  const liveSummary = [
+    `After an order is fulfilled${liveConditionText ? `, when ${liveConditionText}` : ""}, this rule applies to ${liveProductText} and awards ${liveRewardText} as Shopify Native Store Credit.`,
+    form.minimumOrderValue ? `Order minimum ${formatMoney(form.minimumOrderValue, data.currencyCode)}.` : "",
+    form.maximumReward ? `Maximum reward ${formatMoney(form.maximumReward, data.currencyCode)}.` : "",
+    form.expiryDays ? `Credit expires after ${form.expiryDays} days.` : "Credit does not expire.",
+    form.requirePrepaid ? "Only prepaid orders qualify." : "",
+    form.notifyCustomer ? "Customer notification is on." : "This rule will not notify the customer.",
+    editingRuleId
+      ? "Saving changes keeps this rule's current activation state."
+      : "New rules are saved paused.",
+    "Only the first matching rule by priority awards credit.",
+  ].filter(Boolean).join(" ");
 
   const previewBase = 25000;
 
@@ -922,7 +1096,7 @@ export default function AutomationsPage() {
     : rawReward;
 
   return (
-    <s-page heading="Automations">
+    <s-page heading="Rewards">
       <div className="cfa-page">
         <style>{`
           .cfa-page {
@@ -961,6 +1135,8 @@ export default function AutomationsPage() {
             flex-wrap: wrap;
             gap: 15px;
           }
+
+          .cfa-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
           .cfa-kicker {
             color: #7b867e;
@@ -1220,6 +1396,7 @@ export default function AutomationsPage() {
           .cfa-actions {
             display: flex;
             align-items: center;
+            flex-wrap: wrap;
             gap: 5px;
           }
 
@@ -1535,6 +1712,32 @@ export default function AutomationsPage() {
             gap: 8px;
           }
 
+          .cfa-condition-groups { display: grid; gap: 10px; }
+          .cfa-condition-group {
+            display: grid;
+            gap: 9px;
+            padding: 10px;
+            border: 1px solid #e3e9e4;
+            border-radius: 8px;
+            background: #fbfcfb;
+          }
+          .cfa-group-title { margin-right: auto; color: #3c4940; font-size: 10px; }
+          .cfa-template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+          .cfa-template-button {
+            display: grid;
+            gap: 4px;
+            padding: 9px 10px;
+            border: 1px solid #dfe7e1;
+            border-radius: 8px;
+            background: #fff;
+            color: #344039;
+            text-align: left;
+            cursor: pointer;
+          }
+          .cfa-template-button:hover { border-color: #9bb3a1; background: #f7faf7; }
+          .cfa-template-button strong { font-size: 10px; }
+          .cfa-template-button span { color: #78847d; font-size: 9px; line-height: 1.45; }
+
           .cfa-condition-row {
             display: grid;
             grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 28px;
@@ -1683,6 +1886,23 @@ export default function AutomationsPage() {
             white-space: nowrap;
           }
 
+          .cfa-rule-summary {
+            padding: 12px;
+            border: 1px solid #dce8df;
+            border-radius: 8px;
+            background: #f4f8f4;
+            color: #536258;
+            font-size: 11px;
+            line-height: 1.65;
+          }
+
+          .cfa-rule-summary strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #315b48;
+            font-size: 10px;
+          }
+
           .cfa-modal-foot {
             display: flex;
             align-items: center;
@@ -1754,19 +1974,27 @@ export default function AutomationsPage() {
 
         <header className="cfa-head">
           <div>
-            <div className="cfa-kicker">Reward management</div>
-            <h1 className="cfa-title">Automations</h1>
+            <div className="cfa-kicker">Store credit rewards</div>
+            <h1 className="cfa-title">Rewards</h1>
             <p className="cfa-subtitle">
-              Manage reward programs and decide which customers qualify.
+              Choose when customers earn store credit, who qualifies and how much they receive.
             </p>
           </div>
 
-          <button
-            className="cfa-button cfa-button--primary"
-            onClick={openCreate}
-          >
-            + Create automation
-          </button>
+          <div className="cfa-head-actions">
+            <Link
+              className="cfa-button cfa-button--quiet"
+              to="/app/automation-simulator"
+            >
+              Preview a reward
+            </Link>
+            <button
+              className="cfa-button cfa-button--primary"
+              onClick={openCreate}
+            >
+              + Create reward
+            </button>
+          </div>
         </header>
 
         {notice && (
@@ -1784,11 +2012,11 @@ export default function AutomationsPage() {
 
         <section className="cfa-stats">
           <article className="cfa-stat">
-            <div className="cfa-stat-label">Total programs</div>
+            <div className="cfa-stat-label">Saved rewards</div>
             <div className="cfa-stat-value">
               {data.rules.filter((rule) => !rule.archivedAt).length}
             </div>
-            <div className="cfa-stat-note">Non-archived rules</div>
+            <div className="cfa-stat-note">Available reward rules</div>
           </article>
 
           <article className="cfa-stat">
@@ -1938,6 +2166,7 @@ export default function AutomationsPage() {
                             {!archived ? (
                               <>
                                 <button
+                                  type="button"
                                   className="cfa-button cfa-button--quiet"
                                   disabled={busy}
                                   onClick={() => openEdit(rule)}
@@ -1969,20 +2198,46 @@ export default function AutomationsPage() {
 
                                 <button
                                   className="cfa-button cfa-button--quiet cfa-button--danger"
+                                  type="button"
                                   disabled={busy}
                                   onClick={() => archiveRule(rule)}
                                 >
                                   Archive
                                 </button>
+
+                                <button
+                                  className="cfa-button cfa-button--quiet cfa-button--danger"
+                                  type="button"
+                                  disabled={busy || rule.enabled}
+                                  title={rule.enabled
+                                    ? "Pause this rule before permanently deleting it."
+                                    : "Permanently delete this rule while retaining financial history."}
+                                  onClick={() => deleteRule(rule)}
+                                >
+                                  Delete permanently
+                                </button>
                               </>
                             ) : (
-                              <button
-                                className="cfa-button cfa-button--quiet"
-                                disabled={busy}
-                                onClick={() => restoreRule(rule)}
-                              >
-                                Restore
-                              </button>
+                              <>
+                                <button
+                                  className="cfa-button cfa-button--quiet"
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => restoreRule(rule)}
+                                >
+                                  Restore
+                                </button>
+
+                                <button
+                                  className="cfa-button cfa-button--quiet cfa-button--danger"
+                                  type="button"
+                                  disabled={busy || rule.enabled}
+                                  title="Permanently delete this rule while retaining financial history."
+                                  onClick={() => deleteRule(rule)}
+                                >
+                                  Delete permanently
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -2017,7 +2272,7 @@ export default function AutomationsPage() {
               <header className="cfa-modal-head">
                 <div>
                   <div className="cfa-modal-title" id="cfa-dialog-title">
-                    {editingRuleId ? "Edit automation" : "Create automation"}
+                    {editingRuleId ? "Edit automation" : "Save reward"}
                   </div>
                   <div className="cfa-modal-subtitle">
                     Configure the trigger, conditions and reward.
@@ -2063,6 +2318,21 @@ export default function AutomationsPage() {
                     <div className="cfa-step-help">
                       This event starts the reward evaluation.
                     </div>
+
+                    {!editingRuleId ? (
+                      <section className="cfa-field cfa-field--full" aria-label="Reward templates">
+                        <div className="cfa-label">Start from an editable template</div>
+                        <div className="cfa-template-grid">
+                          {RULE_TEMPLATES.map((template) => (
+                            <button className="cfa-template-button" type="button" key={template.id} onClick={() => applyTemplate(template.id)}>
+                              <strong>{template.name}</strong>
+                              <span>{template.description}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <span className="cfa-help">Collection targeting and time-since-last-order win-back rules are not available in this rule engine yet.</span>
+                      </section>
+                    ) : null}
 
                     <div className="cfa-form-grid">
                       <div className="cfa-field cfa-field--full">
@@ -2377,153 +2647,52 @@ export default function AutomationsPage() {
                       </div>
 
                       <div className="cfa-field cfa-field--full">
+                        <div className="cfa-step-heading">Condition groups</div>
+                        <div className="cfa-step-help">
+                          Each group has its own AND/OR logic. Then choose whether all groups or any group must match.
+                        </div>
                         <div className="cfa-group-logic">
-                          <span className="cfa-label">Condition matching</span>
-                          <button
-                            type="button"
-                            className="cfa-logic-btn"
-                            aria-pressed={form.conditions.logic === "AND"}
-                            onClick={() =>
-                              setForm({
-                                ...form,
-                                conditions: {
-                                  ...form.conditions,
-                                  logic: "AND",
-                                },
-                              })
-                            }
-                          >
-                            Match all (AND)
-                          </button>
-                          <button
-                            type="button"
-                            className="cfa-logic-btn"
-                            aria-pressed={form.conditions.logic === "OR"}
-                            onClick={() =>
-                              setForm({
-                                ...form,
-                                conditions: {
-                                  ...form.conditions,
-                                  logic: "OR",
-                                },
-                              })
-                            }
-                          >
-                            Match any (OR)
-                          </button>
+                          <span className="cfa-label">Across groups</span>
+                          <button type="button" className="cfa-logic-btn" aria-pressed={form.conditions.logic === "AND"} onClick={() => setForm({ ...form, conditions: { ...form.conditions, logic: "AND" } })}>All groups (AND)</button>
+                          <button type="button" className="cfa-logic-btn" aria-pressed={form.conditions.logic === "OR"} onClick={() => setForm({ ...form, conditions: { ...form.conditions, logic: "OR" } })}>Any group (OR)</button>
                         </div>
 
-                        {form.conditions.rules.length > 0 ? (
-                          <div className="cfa-condition-list">
-                            {form.conditions.rules.map((condition, index) => (
-                              <div className="cfa-condition-row" key={index}>
-                                <select
-                                  aria-label={`Condition ${index + 1} field`}
-                                  value={condition.field}
-                                  onChange={(event) =>
-                                    changeConditionField(
-                                      index,
-                                      event.target.value as ConditionField,
-                                    )
-                                  }
-                                >
-                                  {CONDITION_FIELDS.map((field) => (
-                                    <option key={field.value} value={field.value}>
-                                      {field.label}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                <select
-                                  aria-label={`Condition ${index + 1} operator`}
-                                  value={condition.operator}
-                                  onChange={(event) =>
-                                    updateCondition(index, {
-                                      operator: event.target.value as ConditionOperator,
-                                    })
-                                  }
-                                >
-                                  {operatorsForField(condition.field).map((operator) => (
-                                    <option key={operator} value={operator}>
-                                      {humanize(operator)}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                {condition.field === "PAYMENT_STATUS" ? (
-                                  <select
-                                    aria-label={`Condition ${index + 1} value`}
-                                    value={condition.value}
-                                    onChange={(event) =>
-                                      updateCondition(index, {
-                                        value: event.target.value,
-                                      })
-                                    }
-                                  >
-                                    <option value="PREPAID">Prepaid</option>
-                                    <option value="COD">COD</option>
-                                    <option value="UNKNOWN">Unknown</option>
-                                  </select>
-                                ) : (
-                                  <input
-                                    aria-label={`Condition ${index + 1} value`}
-                                    type={
-                                      NUMERIC_FIELDS.has(condition.field)
-                                        ? "number"
-                                        : "text"
-                                    }
-                                    min={
-                                      NUMERIC_FIELDS.has(condition.field)
-                                        ? "0"
-                                        : undefined
-                                    }
-                                    step={
-                                      condition.field === "ORDER_SUBTOTAL"
-                                        ? "0.01"
-                                        : "1"
-                                    }
-                                    placeholder={
-                                      condition.field === "SHIPPING_COUNTRY"
-                                        ? "e.g. IN"
-                                        : "Value"
-                                    }
-                                    value={condition.value}
-                                    onChange={(event) =>
-                                      updateCondition(index, {
-                                        value: event.target.value,
-                                      })
-                                    }
-                                  />
-                                )}
-
-                                <button
-                                  className="cfa-remove"
-                                  type="button"
-                                  aria-label={`Remove condition ${index + 1}`}
-                                  onClick={() => removeCondition(index)}
-                                >
-                                  ×
-                                </button>
+                        <div className="cfa-condition-groups">
+                          {form.conditions.groups.map((group, groupIndex) => (
+                            <section className="cfa-condition-group" key={groupIndex}>
+                              <div className="cfa-group-logic">
+                                <strong className="cfa-group-title">Group {groupIndex + 1}</strong>
+                                <button type="button" className="cfa-logic-btn" aria-pressed={group.logic === "AND"} onClick={() => setConditionGroupLogic(groupIndex, "AND")}>Match all</button>
+                                <button type="button" className="cfa-logic-btn" aria-pressed={group.logic === "OR"} onClick={() => setConditionGroupLogic(groupIndex, "OR")}>Match any</button>
+                                <button type="button" className="cfa-remove" aria-label={`Remove condition group ${groupIndex + 1}`} disabled={form.conditions.groups.length === 1} onClick={() => removeConditionGroup(groupIndex)}>×</button>
                               </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="cfa-info">
-                            No additional condition group. The rule will use
-                            the minimum order, product and payment settings above.
-                          </div>
-                        )}
-
-                        <div style={{ marginTop: 9 }}>
-                          <button
-                            type="button"
-                            className="cfa-button"
-                            onClick={addCondition}
-                            disabled={form.conditions.rules.length >= 20}
-                          >
-                            + Add condition
-                          </button>
+                              {group.rules.length > 0 ? (
+                                <div className="cfa-condition-list">
+                                  {group.rules.map((condition, index) => (
+                                    <div className="cfa-condition-row" key={index}>
+                                      <select aria-label={`Group ${groupIndex + 1} condition ${index + 1} field`} value={condition.field} onChange={(event) => changeConditionField(groupIndex, index, event.target.value as ConditionField)}>
+                                        {CONDITION_FIELDS.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}
+                                      </select>
+                                      <select aria-label={`Group ${groupIndex + 1} condition ${index + 1} operator`} value={condition.operator} onChange={(event) => updateCondition(groupIndex, index, { operator: event.target.value as ConditionOperator })}>
+                                        {operatorsForField(condition.field).map((operator) => <option key={operator} value={operator}>{humanize(operator)}</option>)}
+                                      </select>
+                                      {condition.field === "PAYMENT_STATUS" ? (
+                                        <select aria-label={`Group ${groupIndex + 1} condition ${index + 1} value`} value={condition.value} onChange={(event) => updateCondition(groupIndex, index, { value: event.target.value })}>
+                                          <option value="PREPAID">Prepaid</option><option value="COD">COD</option><option value="UNKNOWN">Unknown</option>
+                                        </select>
+                                      ) : (
+                                        <input aria-label={`Group ${groupIndex + 1} condition ${index + 1} value`} type={NUMERIC_FIELDS.has(condition.field) ? "number" : "text"} min={NUMERIC_FIELDS.has(condition.field) ? "0" : undefined} step={condition.field === "ORDER_SUBTOTAL" ? "0.01" : "1"} placeholder={condition.field === "SHIPPING_COUNTRY" ? "e.g. IN" : "Value"} value={condition.value} onChange={(event) => updateCondition(groupIndex, index, { value: event.target.value })} />
+                                      )}
+                                      <button className="cfa-remove" type="button" aria-label={`Remove group ${groupIndex + 1} condition ${index + 1}`} onClick={() => removeCondition(groupIndex, index)}>×</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : <div className="cfa-help">No conditions in this group yet.</div>}
+                              <button type="button" className="cfa-button" onClick={() => addCondition(groupIndex)} disabled={form.conditions.groups.reduce((sum, item) => sum + item.rules.length, 0) >= 20}>+ Add condition to group</button>
+                            </section>
+                          ))}
                         </div>
+                        <button type="button" className="cfa-button" style={{ marginTop: 9 }} onClick={addConditionGroup} disabled={form.conditions.groups.length >= 10}>+ Add condition group</button>
                       </div>
 
                       <div className="cfa-field cfa-field--full">
@@ -2729,6 +2898,13 @@ export default function AutomationsPage() {
                           Illustrative calculation. Actual rewards use the
                           qualifying order&apos;s values and currency.
                         </span>
+                      </div>
+
+                      <div className="cfa-field cfa-field--full">
+                        <div className="cfa-rule-summary" aria-live="polite">
+                          <strong>Rule summary</strong>
+                          {liveSummary}
+                        </div>
                       </div>
                     </div>
                   </>

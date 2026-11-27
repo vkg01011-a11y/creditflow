@@ -247,7 +247,7 @@ function compareTextList(values, expected, operator) {
  * An absent or empty condition group imposes no additional restriction.
  * Invalid or unavailable customer data fails closed for customer conditions.
  */
-export function matchesRuleConditions({
+export function evaluateRuleConditions({
   order,
   conditions,
   orderSubtotal,
@@ -255,26 +255,28 @@ export function matchesRuleConditions({
   paymentStatus = "UNKNOWN",
   customer = null,
 }) {
-  if (conditions == null) return true;
+  if (conditions == null) {
+    return { logic: "AND", matches: true, results: [] };
+  }
 
   if (
     typeof conditions !== "object" ||
     Array.isArray(conditions)
   ) {
-    return false;
+    return { logic: "AND", matches: false, results: [] };
   }
 
   const logic = conditions.logic ?? "AND";
-  const rules = conditions.rules ?? [];
+  const groups = Array.isArray(conditions.groups)
+    ? conditions.groups
+    : [{ logic, rules: conditions.rules ?? [] }];
 
-  if (
-    !["AND", "OR"].includes(logic) ||
-    !Array.isArray(rules)
-  ) {
-    return false;
+  if (![
+    "AND",
+    "OR",
+  ].includes(logic) || !Array.isArray(groups) || groups.length === 0) {
+    return { logic: "AND", matches: false, results: [] };
   }
-
-  if (rules.length === 0) return true;
 
   const context = {
     order,
@@ -284,13 +286,46 @@ export function matchesRuleConditions({
     customer,
   };
 
-  const results = rules.map((condition) =>
-    evaluateCondition(condition, context),
-  );
+  const results = [];
+  const groupResults = [];
+  for (const [groupIndex, group] of groups.entries()) {
+    if (
+      typeof group !== "object" || group === null ||
+      !["AND", "OR"].includes(group.logic ?? "AND") ||
+      !Array.isArray(group.rules)
+    ) {
+      return { logic: "AND", matches: false, results: [] };
+    }
+    const groupLogic = group.logic ?? "AND";
+    if (group.rules.length === 0 && groups.length > 1) {
+      return { logic, matches: false, results: [] };
+    }
+    const conditionResults = group.rules.map((condition, index) => ({
+      index,
+      groupIndex,
+      field: String(condition?.field ?? "UNKNOWN"),
+      operator: String(condition?.operator ?? "UNKNOWN"),
+      value: String(condition?.value ?? ""),
+      passed: evaluateCondition(condition, context),
+    }));
+    results.push(...conditionResults);
+    const groupMatches = conditionResults.length === 0 || (
+      groupLogic === "OR"
+        ? conditionResults.some((item) => item.passed)
+        : conditionResults.every((item) => item.passed)
+    );
+    groupResults.push({ logic: groupLogic, matches: groupMatches, results: conditionResults });
+  }
 
-  return logic === "OR"
-    ? results.some(Boolean)
-    : results.every(Boolean);
+  const matches = logic === "OR"
+    ? groupResults.some((item) => item.matches)
+    : groupResults.every((item) => item.matches);
+
+  return { logic, matches, results, groups: groupResults };
+}
+
+export function matchesRuleConditions(input) {
+  return evaluateRuleConditions(input).matches;
 }
 
 /**

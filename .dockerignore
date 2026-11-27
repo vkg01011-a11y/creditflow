@@ -1,3 +1,15 @@
 .cache
 build
+app/build
+public/build
 node_modules
+.git
+.github
+.shopify
+.react-router
+.env
+.env.*
+*.backup
+*.zip
+*.log
+.DS_Store

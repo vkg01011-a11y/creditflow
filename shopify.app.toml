@@ -1,11 +1,11 @@
 
 client_id = "cdf8254d863fe585eb72dbd78a68b732"
-name = "creditflow"
-application_url = "https://example.com"
+name = "Pikmora Perks"
+application_url = "https://creditflow-staging-web.onrender.com"
 embedded = true
 
 [access_scopes]
-scopes = "read_orders,read_customers,read_products,write_store_credit_account_transactions"
+scopes = "read_orders,read_customers,read_products,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions"
 
 [webhooks]
 api_version = "2026-10"
@@ -23,8 +23,24 @@ uri = "/webhooks/orders-fulfilled"
 topics = ["orders/fulfilled"]
 
 [auth]
-redirect_urls = ["https://example.com/auth/callback"]
+redirect_urls = ["https://creditflow-staging-web.onrender.com/auth/callback"]
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
+
+# Required Shopify App Store privacy compliance webhooks.
+[[webhooks.subscriptions]]
+uri = "/webhooks/customers/data_request"
+compliance_topics = ["customers/data_request"]
+
+[[webhooks.subscriptions]]
+uri = "/webhooks/customers/redact"
+compliance_topics = ["customers/redact"]
+
+[[webhooks.subscriptions]]
+uri = "/webhooks/shop/redact"
+compliance_topics = ["shop/redact"]
+
+[[webhooks.subscriptions]]
+uri = "/webhooks/refunds/create"
+topics = ["refunds/create"]

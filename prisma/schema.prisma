@@ -67,7 +67,50 @@ enum NotificationStatus {
   QUEUED
   PROCESSING
   SENT
+  SKIPPED
   FAILED
+}
+
+enum CreditIssuedEmailMode {
+  SHOPIFY_NATIVE
+  CREDITFLOW_CUSTOM
+  DISABLED
+}
+
+enum CreditReversalStatus {
+  PROCESSING
+  REVERSED
+  NO_REVERSAL
+  REVIEW_REQUIRED
+}
+
+enum PrivacyRequestType {
+  CUSTOMERS_DATA_REQUEST
+  CUSTOMERS_REDACT
+  SHOP_REDACT
+}
+
+enum PrivacyRequestStatus {
+  RECEIVED
+  PROCESSING
+  RETRY_PENDING
+  COMPLETED
+  FAILED
+  REVIEW_REQUIRED
+}
+
+enum WorkerRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum BillingUsageEventStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  SKIPPED
+  REVIEW_REQUIRED
 }
 
 // ============================================================
@@ -116,11 +159,15 @@ model Merchant {
   updatedAt           DateTime       @updatedAt
 
   automationRules AutomationRule[]
+  automationExecutions AutomationExecution[]
   grants          CreditGrant[]
   ledgerEntries   CreditLedgerEntry[]
   webhookEvents   WebhookEvent[]
   notifications   Notification[]
   auditLogs       AuditLog[]
+  creditReversals CreditReversal[]
+  emailSettings   EmailNotificationSettings?
+  billingUsageEvents BillingUsageEvent[]
 
   @@index([status, createdAt])
 }
@@ -193,7 +240,9 @@ model CreditGrant {
 
   customerGid           String
   orderGid              String
-  ruleId                String
+  ruleId                String?
+  ruleNameSnapshot      String?
+  ruleSnapshot          Json?
 
   amount                Decimal           @db.Decimal(20, 6)
   currencyCode          String            @db.VarChar(3)
@@ -202,23 +251,68 @@ model CreditGrant {
 
   shopifyAccountGid     String?
   shopifyTransactionGid String?
+  expiresAt             DateTime?
 
   errorMessage          String?           @db.Text
   issuedAt              DateTime?
   reversedAmount        Decimal?          @db.Decimal(20, 6)
+  rewardBaseAmount      Decimal?          @db.Decimal(20, 6)
 
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
   merchant      Merchant          @relation(fields: [shop], references: [shop], onDelete: Cascade)
-  rule          AutomationRule    @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  rule          AutomationRule?   @relation(fields: [ruleId], references: [id], onDelete: SetNull)
   ledgerEntries CreditLedgerEntry[]
+  reversals     CreditReversal[]
 
   @@unique([shop, orderGid, ruleId])
   @@unique([shop, shopifyTransactionGid])
   @@index([shop, customerGid, createdAt])
   @@index([shop, status, createdAt])
   @@index([ruleId])
+}
+
+// ============================================================
+// AUTOMATION EXECUTION HISTORY
+// Per-order/per-rule evaluation snapshots. ruleId intentionally has no FK,
+// so permanent deletion of a rule does not erase its execution history.
+// ============================================================
+
+model AutomationExecution {
+  id                   String   @id @default(cuid())
+  shop                 String
+  executionKey         String   @unique
+  orderGid             String
+  orderName            String?
+  ruleId               String?
+  ruleNameSnapshot     String
+  rulePrioritySnapshot Int?
+  trigger              String   @default("ORDER_FULFILLED")
+  status               String   @db.VarChar(32)
+  reason               String   @db.VarChar(100)
+  conditions           Json?
+  orderSubtotal        Decimal? @db.Decimal(20, 6)
+  eligibleSubtotal     Decimal? @db.Decimal(20, 6)
+  rewardBase           String?  @db.VarChar(32)
+  rewardBaseAmount     Decimal? @db.Decimal(20, 6)
+  estimatedReward      Decimal? @db.Decimal(20, 6)
+  currencyCode         String?  @db.VarChar(3)
+  creditGrantId        String?
+  grantAmount          Decimal? @db.Decimal(20, 6)
+  attemptCount         Int      @default(1)
+  errorMessage         String?  @db.VarChar(1000)
+  evaluatedAt          DateTime @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([shop, evaluatedAt(sort: Desc), id(sort: Desc)])
+  @@index([shop, ruleId, evaluatedAt(sort: Desc)])
+  @@index([shop, status, evaluatedAt(sort: Desc)])
+  @@index([shop, orderGid])
 }
 
 // ============================================================
@@ -279,10 +373,14 @@ model WebhookEvent {
   status        WebhookEventStatus @default(RECEIVED)
   attemptCount  Int               @default(0)
 
+  payload       Json?
   payloadHash   String?
+  lockedAt      DateTime?
+  lockedBy      String?
   lastError     String?           @db.Text
 
   receivedAt    DateTime          @default(now())
+  triggeredAt   DateTime?
   processedAt   DateTime?
   nextAttemptAt DateTime?
 
@@ -293,7 +391,37 @@ model WebhookEvent {
 
   @@unique([shop, webhookId])
   @@index([shop, status, receivedAt])
-  @@index([status, nextAttemptAt])
+  @@index([status, nextAttemptAt, receivedAt])
+}
+
+// ============================================================
+// PRIVACY REQUEST INBOX
+// Minimal authenticated Shopify compliance requests and data exports.
+// No Merchant foreign key: redaction must be able to remove shop rows.
+// ============================================================
+
+model PrivacyRequest {
+  id                 String               @id @default(cuid())
+  shop               String
+  webhookId          String
+  type               PrivacyRequestType
+  status             PrivacyRequestStatus @default(RECEIVED)
+  customerKey        String?
+  requestedOrderIds  Json?
+  payload            Json?
+  dataSnapshot       Json?
+  attemptCount       Int                  @default(0)
+  lockedAt           DateTime?
+  lockedBy           String?
+  nextAttemptAt      DateTime?
+  receivedAt         DateTime             @default(now())
+  processedAt        DateTime?
+  lastError          String?              @db.Text
+
+  @@unique([shop, webhookId])
+  @@index([shop, type, receivedAt(sort: Desc)])
+  @@index([shop, customerKey])
+  @@index([status, nextAttemptAt, receivedAt])
 }
 
 // ============================================================
@@ -317,6 +445,9 @@ model Notification {
 
   attemptCount     Int                @default(0)
   lastError        String?            @db.Text
+  metadata         Json?
+  lockedAt         DateTime?
+  lockedBy         String?
 
   scheduledAt      DateTime?
   sentAt           DateTime?
@@ -328,6 +459,48 @@ model Notification {
 
   @@index([shop, customerGid, createdAt])
   @@index([shop, status, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+// ============================================================
+// EMAIL NOTIFICATION SETTINGS
+// Merchant-controlled branded transactional email preferences.
+// Provider credentials are held only in the hosting secret manager.
+// ============================================================
+
+model EmailNotificationSettings {
+  id                    String                 @id @default(cuid())
+  shop                  String                 @unique
+  issuedEmailMode       CreditIssuedEmailMode  @default(SHOPIFY_NATIVE)
+  expiryReminderEnabled Boolean                @default(false)
+  expiryReminderDays    Json                   @default("[7,1]")
+
+  senderName            String?                @db.VarChar(100)
+  replyToEmail          String?                @db.VarChar(254)
+  logoUrl               String?                @db.VarChar(2048)
+  accentColor           String                 @default("#176B5B") @db.VarChar(7)
+
+  issuedSubject         String                 @default("A little something for your next order") @db.VarChar(180)
+  issuedHeadline        String                 @default("You've got store credit!") @db.VarChar(120)
+  issuedMessage         String                 @default("Thank you for shopping with {{ shop_name }}. We've added {{ credit_amount }} to your store credit account.") @db.VarChar(500)
+  issuedCtaLabel        String                 @default("Shop now") @db.VarChar(40)
+
+  expirySubject        String                 @default("Your store credit is about to expire") @db.VarChar(180)
+  expiryHeadline       String                 @default("A little reminder before it expires") @db.VarChar(120)
+  expiryMessage        String                 @default("You still have {{ remaining_amount }} in store credit. Use it before {{ expiry_date }}.") @db.VarChar(500)
+  expiryCtaLabel       String                 @default("Use my credit") @db.VarChar(40)
+
+  footerText           String?                @db.VarChar(240)
+  lastExpiryScanAt     DateTime?
+  expiryScanInProgress Boolean                @default(false)
+  expiryScanCursor     String?
+
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@index([expiryReminderEnabled, lastExpiryScanAt])
 }
 
 // ============================================================
@@ -386,4 +559,71 @@ model ShopifySessionMigration {
   migration_name String @id @db.VarChar(255)
 
   @@map("shopify_sessions_migrations")
+}
+
+model CreditReversal {
+  id                    String               @id @default(cuid())
+  shop                  String
+  refundGid             String
+  webhookId             String
+  orderGid              String
+  creditGrantId         String
+  refundedBaseAmount    Decimal              @db.Decimal(20, 6)
+  amount                Decimal              @db.Decimal(20, 6)
+  currencyCode          String               @db.VarChar(3)
+  status                CreditReversalStatus @default(PROCESSING)
+  shopifyTransactionGid String?
+  errorMessage          String?              @db.Text
+  processedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  merchant    Merchant    @relation(fields: [shop], references: [shop], onDelete: Cascade)
+  creditGrant CreditGrant @relation(fields: [creditGrantId], references: [id], onDelete: Cascade)
+
+  @@unique([shop, refundGid, creditGrantId])
+  @@index([shop, status, createdAt])
+  @@index([creditGrantId, status])
+}
+
+
+// ============================================================
+// GLOBAL WORKER HEARTBEATS
+// Platform-level operational records; intentionally not shop-owned.
+// Retained for a limited period by the worker itself.
+// ============================================================
+
+model WorkerRun {
+  id          String          @id
+  status      WorkerRunStatus @default(RUNNING)
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  @@index([startedAt(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+}
+
+
+model BillingUsageEvent {
+  id             String                  @id @default(cuid())
+  shop           String
+  orderGid       String
+  planAtOccurrence String
+  idempotencyKey String                  @unique
+  occurredAt     DateTime                @default(now())
+  status         BillingUsageEventStatus @default(QUEUED)
+  attemptCount   Int                     @default(0)
+  nextAttemptAt  DateTime?
+  lockedAt       DateTime?
+  lockedBy       String?
+  sentAt         DateTime?
+  lastError      String?                 @db.Text
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  merchant Merchant @relation(fields: [shop], references: [shop], onDelete: Cascade)
+
+  @@unique([shop, orderGid])
+  @@index([status, nextAttemptAt])
+  @@index([shop, status, nextAttemptAt])
 }
